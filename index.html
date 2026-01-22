@@ -199,24 +199,35 @@
                 }
             );
 
-            // Mouse tracking
-            window.addEventListener('mousemove', (event) => {
-                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
+            // Mouse tracking - Mejorado para funcionar en iframe
+            const updateMousePosition = (x, y) => {
+                mouse.x = x;
+                mouse.y = y;
                 targetRotation.y = mouse.x * CONFIG.headSensitivity;
                 targetRotation.x = mouse.y * CONFIG.headSensitivityY;
+            };
+
+            // Eventos directos (cuando no está en iframe)
+            window.addEventListener('mousemove', (event) => {
+                const x = (event.clientX / window.innerWidth) * 2 - 1;
+                const y = -(event.clientY / window.innerHeight) * 2 + 1;
+                updateMousePosition(x, y);
             });
 
             // Touch tracking para mobile
             window.addEventListener('touchmove', (event) => {
                 if (event.touches.length > 0) {
                     const touch = event.touches[0];
-                    mouse.x = (touch.clientX / window.innerWidth) * 2 - 1;
-                    mouse.y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    const x = (touch.clientX / window.innerWidth) * 2 - 1;
+                    const y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    updateMousePosition(x, y);
+                }
+            });
 
-                    targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                    targetRotation.x = mouse.y * CONFIG.headSensitivityY;
+            // Listener para mensajes desde el iframe parent (Framer)
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'mousemove') {
+                    updateMousePosition(event.data.x, event.data.y);
                 }
             });
 
