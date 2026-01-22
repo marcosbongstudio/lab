@@ -108,28 +108,38 @@
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Tone mapping para mejor contraste y color
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            renderer.toneMappingExposure = 1.3;  // Exposición aumentada
+            
             container.appendChild(renderer.domElement);
 
-            // Lights - Aumentadas para que se vea bien
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);  // Más luz ambiente
+            // Lights - Aumentadas al máximo para mejor visibilidad
+            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);  // Luz ambiente muy fuerte
             scene.add(ambientLight);
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.2);  // Más intensa
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.5);  // Muy intensa
             directionalLight1.position.set(5, 5, 5);
             scene.add(directionalLight1);
 
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.8);  // Más intensa
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.2);  
             directionalLight2.position.set(-5, 3, -3);
             scene.add(directionalLight2);
 
-            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.6);  // Más intensa
+            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.8);  
             directionalLight3.position.set(0, -5, 0);
             scene.add(directionalLight3);
             
-            // Luz extra frontal para que se vean las caras
-            const frontLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            // Luz frontal muy intensa
+            const frontLight = new THREE.DirectionalLight(0xffffff, 1.5);
             frontLight.position.set(0, 0, 10);
             scene.add(frontLight);
+            
+            // Luz extra desde arriba para definir mejor las formas
+            const topLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            topLight.position.set(0, 10, 0);
+            scene.add(topLight);
 
             // Load model
             const loader = new THREE.GLTFLoader();
@@ -151,13 +161,20 @@
                     model.scale.multiplyScalar(scale);
                     model.position.sub(center.multiplyScalar(scale));
 
-                    // Aclarar materiales si el modelo sigue muy oscuro
+                    // Aclarar materiales y aumentar contraste
                     model.traverse((child) => {
                         if (child.isMesh) {
-                            // Si tiene material, aumentar el brillo
+                            // Si tiene material, aumentar el brillo y contraste
                             if (child.material) {
-                                child.material.emissive = new THREE.Color(0x222222); // Emisión de luz propia
-                                child.material.emissiveIntensity = 0.3;
+                                // Más emisión de luz propia
+                                child.material.emissive = new THREE.Color(0x333333);
+                                child.material.emissiveIntensity = 0.4;
+                                
+                                // Aumentar el brillo general del material
+                                if (child.material.color) {
+                                    // Hacer los colores un poco más brillantes
+                                    child.material.color.multiplyScalar(1.2);
+                                }
                             }
                         }
                     });
