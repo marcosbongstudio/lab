@@ -68,8 +68,8 @@
         const CONFIG = {
             modelURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/e1ea83ae-723d-409e-931d-6ebe691187fa.glb',
             backgroundColor: 'transparent',  // 'transparent' o un color hex como '#7BA888'
-            headSensitivity: 0.4,        // Rotación horizontal (0.3-0.6)
-            headSensitivityY: 0.25,      // Rotación vertical (0.2-0.4)
+            headSensitivity: 0.6,        // Rotación horizontal (aumentado para más movimiento)
+            headSensitivityY: 0.4,       // Rotación vertical (aumentado para más movimiento)
             smoothness: 0.05,            // Suavidad del movimiento (0.03-0.1)
             modelScale: 3,               // Escala del modelo (2-5)
         };
@@ -204,7 +204,7 @@
                 mouse.x = x;
                 mouse.y = y;
                 targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                targetRotation.x = mouse.y * CONFIG.headSensitivityY;
+                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;  // Negativo para invertir el eje Y
             };
 
             // Eventos directos (cuando no está en iframe)
@@ -227,9 +227,12 @@
             // Listener para mensajes desde el iframe parent (Framer)
             window.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'mousemove') {
+                    console.log('Mensaje recibido:', event.data.x.toFixed(2), event.data.y.toFixed(2));
                     updateMousePosition(event.data.x, event.data.y);
                 }
             });
+            
+            console.log('Personaje 3D listo - esperando eventos de mouse');
 
             // Resize
             window.addEventListener('resize', () => {
