@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D Character</title>
+    <title>Bong 3D - Marcos y Maru</title>
     <style>
         * {
             margin: 0;
@@ -57,24 +57,25 @@
 </head>
 <body>
     <div id="container"></div>
-    <div id="loading">Cargando modelo 3D...</div>
+    <div id="loading">Cargando personajes...</div>
     <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     
     <script>
-        // CONFIGURACIÓN - Editá estos valores según necesites
+        // CONFIGURACIÓN
         const CONFIG = {
-            modelURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/e1ea83ae-723d-409e-931d-6ebe691187fa.glb',
-            backgroundColor: 'transparent',  // 'transparent' o un color hex como '#7BA888'
-            headSensitivity: 0.6,        // Rotación horizontal (aumentado para más movimiento)
-            headSensitivityY: 0.4,       // Rotación vertical (aumentado para más movimiento)
-            smoothness: 0.05,            // Suavidad del movimiento (0.03-0.1)
-            modelScale: 3,               // Escala del modelo (2-5)
+            marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
+            maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
+            backgroundColor: 'transparent',
+            spacing: 2.5,                // Distancia entre personajes
+            headSensitivity: 0.6,        // Rotación horizontal
+            headSensitivityY: 0.4,       // Rotación vertical
+            smoothness: 0.05,            // Suavidad del movimiento
+            modelScale: 3,               // Escala de los modelos
         };
 
-        // Referencias globales
         const container = document.getElementById('container');
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
@@ -83,14 +84,15 @@
         const targetRotation = { x: 0, y: 0 };
         const currentRotation = { x: 0, y: 0 };
         
-        let scene, camera, renderer, model;
+        let scene, camera, renderer;
+        let marcosModel, maruModel;
+        let modelsLoaded = 0;
 
         // Setup escena
         function init() {
             // Scene
             scene = new THREE.Scene();
             
-            // Solo setear background si no es transparent
             if (CONFIG.backgroundColor !== 'transparent') {
                 scene.background = new THREE.Color(CONFIG.backgroundColor);
             }
@@ -109,112 +111,61 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             
-            // Tone mapping para mejor contraste y color
+            // Tone mapping para mejor contraste
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.3;  // Exposición aumentada
+            renderer.toneMappingExposure = 1.3;
             
             container.appendChild(renderer.domElement);
 
-            // Lights - Aumentadas al máximo para mejor visibilidad
-            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);  // Luz ambiente muy fuerte
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
             scene.add(ambientLight);
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.5);  // Muy intensa
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.5);
             directionalLight1.position.set(5, 5, 5);
             scene.add(directionalLight1);
 
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.2);  
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.2);
             directionalLight2.position.set(-5, 3, -3);
             scene.add(directionalLight2);
 
-            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.8);  
+            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.8);
             directionalLight3.position.set(0, -5, 0);
             scene.add(directionalLight3);
             
-            // Luz frontal muy intensa
             const frontLight = new THREE.DirectionalLight(0xffffff, 1.5);
             frontLight.position.set(0, 0, 10);
             scene.add(frontLight);
             
-            // Luz extra desde arriba para definir mejor las formas
             const topLight = new THREE.DirectionalLight(0xffffff, 1.0);
             topLight.position.set(0, 10, 0);
             scene.add(topLight);
 
-            // Load model
-            const loader = new THREE.GLTFLoader();
-            
-            loader.load(
-                CONFIG.modelURL,
-                (gltf) => {
-                    model = gltf.scene;
+            // Load models
+            loadModel(CONFIG.marcosURL, -CONFIG.spacing / 2, (model) => {
+                marcosModel = model;
+                checkModelsLoaded();
+            });
 
-                    // Center and scale
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    const size = box.getSize(new THREE.Vector3());
+            loadModel(CONFIG.maruURL, CONFIG.spacing / 2, (model) => {
+                maruModel = model;
+                checkModelsLoaded();
+            });
 
-                    console.log('Modelo cargado. Tamaño:', size);
-
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const scale = CONFIG.modelScale / maxDim;
-                    model.scale.multiplyScalar(scale);
-                    model.position.sub(center.multiplyScalar(scale));
-
-                    // Aclarar materiales y aumentar contraste
-                    model.traverse((child) => {
-                        if (child.isMesh) {
-                            // Si tiene material, aumentar el brillo y contraste
-                            if (child.material) {
-                                // Más emisión de luz propia
-                                child.material.emissive = new THREE.Color(0x333333);
-                                child.material.emissiveIntensity = 0.4;
-                                
-                                // Aumentar el brillo general del material
-                                if (child.material.color) {
-                                    // Hacer los colores un poco más brillantes
-                                    child.material.color.multiplyScalar(1.2);
-                                }
-                            }
-                        }
-                    });
-
-                    scene.add(model);
-                    
-                    loadingEl.style.display = 'none';
-                    console.log('✓ Modelo listo');
-                },
-                (progress) => {
-                    if (progress.total > 0) {
-                        const percent = Math.round((progress.loaded / progress.total) * 100);
-                        loadingEl.textContent = `Cargando: ${percent}%`;
-                        console.log(`Progreso: ${percent}%`);
-                    }
-                },
-                (error) => {
-                    console.error('Error cargando modelo:', error);
-                    loadingEl.style.display = 'none';
-                    errorEl.textContent = 'Error cargando el modelo 3D. Verificá la consola.';
-                    errorEl.style.display = 'block';
-                }
-            );
-
-            // Mouse tracking - Mejorado para funcionar en iframe
+            // Mouse tracking
             const updateMousePosition = (x, y) => {
                 mouse.x = x;
                 mouse.y = y;
                 targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;  // Negativo para invertir el eje Y
+                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
             };
 
-            // Eventos directos (cuando no está en iframe)
             window.addEventListener('mousemove', (event) => {
                 const x = (event.clientX / window.innerWidth) * 2 - 1;
                 const y = -(event.clientY / window.innerHeight) * 2 + 1;
                 updateMousePosition(x, y);
             });
 
-            // Touch tracking para mobile
             window.addEventListener('touchmove', (event) => {
                 if (event.touches.length > 0) {
                     const touch = event.touches[0];
@@ -224,15 +175,13 @@
                 }
             });
 
-            // Listener para mensajes desde el iframe parent (Framer)
+            // Mensajes desde parent (para wrapper)
             window.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'mousemove') {
                     console.log('Mensaje recibido:', event.data.x.toFixed(2), event.data.y.toFixed(2));
                     updateMousePosition(event.data.x, event.data.y);
                 }
             });
-            
-            console.log('Personaje 3D listo - esperando eventos de mouse');
 
             // Resize
             window.addEventListener('resize', () => {
@@ -243,26 +192,98 @@
 
             // Start animation
             animate();
+            
+            console.log('Personajes 3D listos - esperando eventos de mouse');
+        }
+
+        // Load individual model
+        function loadModel(url, xPosition, callback) {
+            const loader = new THREE.GLTFLoader();
+            
+            loader.load(
+                url,
+                (gltf) => {
+                    const model = gltf.scene;
+
+                    // Center and scale
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+
+                    console.log(`Modelo cargado en posición ${xPosition}. Tamaño:`, size);
+
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = CONFIG.modelScale / maxDim;
+                    model.scale.multiplyScalar(scale);
+                    model.position.sub(center.multiplyScalar(scale));
+                    model.position.x = xPosition;
+
+                    // Mejorar materiales
+                    model.traverse((child) => {
+                        if (child.isMesh && child.material) {
+                            child.material.emissive = new THREE.Color(0x333333);
+                            child.material.emissiveIntensity = 0.4;
+                            
+                            if (child.material.color) {
+                                child.material.color.multiplyScalar(1.2);
+                            }
+                        }
+                    });
+
+                    scene.add(model);
+                    callback(model);
+                },
+                (progress) => {
+                    if (progress.total > 0) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        console.log(`Cargando modelo en ${xPosition}: ${percent}%`);
+                    }
+                },
+                (error) => {
+                    console.error(`Error cargando modelo en ${xPosition}:`, error);
+                    errorEl.textContent = 'Error cargando uno de los personajes';
+                    errorEl.style.display = 'block';
+                    loadingEl.style.display = 'none';
+                }
+            );
+        }
+
+        function checkModelsLoaded() {
+            modelsLoaded++;
+            if (modelsLoaded === 2) {
+                loadingEl.textContent = '¡Listo!';
+                setTimeout(() => {
+                    loadingEl.style.display = 'none';
+                }, 1500);
+                console.log('✓ Ambos modelos cargados');
+            } else {
+                loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
+            }
         }
 
         // Animation loop
         function animate() {
             requestAnimationFrame(animate);
 
-            // Smooth interpolation (lerp)
+            // Smooth interpolation
             currentRotation.x += (targetRotation.x - currentRotation.x) * CONFIG.smoothness;
             currentRotation.y += (targetRotation.y - currentRotation.y) * CONFIG.smoothness;
 
-            // Apply rotation
-            if (model) {
-                model.rotation.x = currentRotation.x;
-                model.rotation.y = currentRotation.y;
+            // Apply rotation to both models
+            if (marcosModel) {
+                marcosModel.rotation.x = currentRotation.x;
+                marcosModel.rotation.y = currentRotation.y;
+            }
+            
+            if (maruModel) {
+                maruModel.rotation.x = currentRotation.x;
+                maruModel.rotation.y = currentRotation.y;
             }
 
             renderer.render(scene, camera);
         }
 
-        // Iniciar cuando carga la página
+        // Iniciar
         window.addEventListener('load', init);
     </script>
 </body>
