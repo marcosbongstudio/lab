@@ -69,13 +69,15 @@
             marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
             backgroundColor: 'transparent',
-            spacing: 3.5,                // Aumentado para que no se solapen las orejas
+            spacing: 3.5,                
             headSensitivity: 0.6,        
             headSensitivityY: 0.4,       
             smoothness: 0.05,            
             modelScale: 3,               
-            idleEnabled: true,           // Activar animaciones idle
-            idleSpeed: 0.3,              // Velocidad de las animaciones idle
+            idleEnabled: true,           
+            idleSpeed: 0.3,              
+            maruDelay: 0.15,             // Delay de Maru respecto a Marcos (0-1, más alto = más delay)
+            desaturateReds: 0.4,         // Desaturación de rojos (0 = nada, 1 = total)
         };
 
         const container = document.getElementById('container');
@@ -84,20 +86,43 @@
         
         const mouse = { x: 0, y: 0 };
         const targetRotation = { x: 0, y: 0 };
-        const currentRotation = { x: 0, y: 0 };
+        
+        // Rotaciones separadas para cada personaje
+        const marcosRotation = { x: 0, y: 0 };
+        const maruRotation = { x: 0, y: 0 };
+        const maruTargetRotation = { x: 0, y: 0 };
         
         // Sistema de animaciones idle
         let isIdle = true;
-        let idleState = 'rotate';  // Estados: 'rotate', 'look_sides', 'look_at_each_other'
+        let isTransitioning = false;
+        let transitionProgress = 0;
+        let idleState = 'rotate';
         let idleTime = 0;
         let idleStateTime = 0;
         let lastMouseMoveTime = Date.now();
-        const IDLE_TIMEOUT = 2000;  // 2 segundos sin mouse = idle
-        const IDLE_STATE_DURATION = 4000;  // Cambiar de estado idle cada 4 segundos
+        const IDLE_TIMEOUT = 2000;
+        const IDLE_STATE_DURATION = 5000;  // Aumentado a 5 segundos
+        const TRANSITION_SPEED = 0.02;  // Velocidad de transición suave
         
         let scene, camera, renderer;
         let marcosModel, maruModel;
         let modelsLoaded = 0;
+        
+        // Función para generar movimiento orgánico (pseudo-Perlin noise)
+        function organicNoise(time, seed = 0) {
+            const t = time + seed;
+            return (
+                Math.sin(t * 0.7) * 0.5 +
+                Math.sin(t * 1.3) * 0.3 +
+                Math.sin(t * 2.1) * 0.15 +
+                Math.sin(t * 0.4) * 0.05
+            );
+        }
+        
+        // Función de easing para transiciones suaves
+        function easeInOutCubic(t) {
+            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        }
 
         // Setup escena
         function init() {
@@ -163,16 +188,20 @@
                 checkModelsLoaded();
             });
 
-            // Mouse tracking
+            // Mouse tracking con transiciones suaves
             const updateMousePosition = (x, y) => {
                 mouse.x = x;
                 mouse.y = y;
                 targetRotation.y = mouse.x * CONFIG.headSensitivity;
                 targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
                 
-                // Resetear idle cuando hay movimiento del mouse
+                // Resetear idle y comenzar transición
                 lastMouseMoveTime = Date.now();
-                isIdle = false;
+                if (isIdle) {
+                    isIdle = false;
+                    isTransitioning = true;
+                    transitionProgress = 0;
+                }
             };
 
             window.addEventListener('mousemove', (event) => {
@@ -233,15 +262,31 @@
                     model.position.sub(center.multiplyScalar(scale));
                     model.position.x = xPosition;
 
-                    // Mejorar materiales - Menos brillo
+                    // Mejorar materiales - Menos brillo y desaturar rojos
                     model.traverse((child) => {
                         if (child.isMesh && child.material) {
                             // Reducido el emissive para menos brillo artificial
-                            child.material.emissive = new THREE.Color(0x111111);  // Reducido de 0x333333
-                            child.material.emissiveIntensity = 0.15;  // Reducido de 0.4
+                            child.material.emissive = new THREE.Color(0x111111);
+                            child.material.emissiveIntensity = 0.15;
                             
-                            // No aumentar más el brillo de los colores
-                            // Comentado: child.material.color.multiplyScalar(1.2);
+                            // Desaturar rojos/naranjas
+                            if (child.material.color) {
+                                const color = child.material.color;
+                                const r = color.r;
+                                const g = color.g;
+                                const b = color.b;
+                                
+                                // Detectar si es un color rojizo (más rojo que verde/azul)
+                                if (r > g && r > b && r > 0.5) {
+                                    // Calcular luminosidad
+                                    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+                                    
+                                    // Interpolar hacia escala de grises
+                                    color.r = r + (luminance - r) * CONFIG.desaturateReds;
+                                    color.g = g + (luminance - g) * CONFIG.desaturateReds;
+                                    color.b = b + (luminance - b) * CONFIG.desaturateReds;
+                                }
+                            }
                         }
                     });
 
@@ -284,10 +329,21 @@
             const timeSinceMouseMove = currentTime - lastMouseMoveTime;
             
             // Detectar si debemos entrar en modo idle
-            if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle) {
+            if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle && !isTransitioning) {
                 isIdle = true;
+                isTransitioning = true;
+                transitionProgress = 0;
                 idleStateTime = currentTime;
                 console.log('Entrando en modo idle');
+            }
+            
+            // Manejar transiciones suaves
+            if (isTransitioning) {
+                transitionProgress += TRANSITION_SPEED;
+                if (transitionProgress >= 1) {
+                    transitionProgress = 1;
+                    isTransitioning = false;
+                }
             }
             
             if (isIdle) {
@@ -300,52 +356,103 @@
                     console.log('Nuevo estado idle:', idleState);
                 }
                 
-                idleTime += 0.016 * CONFIG.idleSpeed;  // ~60fps
+                idleTime += 0.016 * CONFIG.idleSpeed;
                 
-                // Animaciones idle según el estado
+                // Calcular rotaciones idle con movimiento orgánico
+                let idleRotX = 0;
+                let idleRotY = 0;
+                
                 switch(idleState) {
                     case 'rotate':
-                        // Ambos rotan lentamente en círculo
-                        targetRotation.y = Math.sin(idleTime) * 0.3;
-                        targetRotation.x = Math.cos(idleTime * 0.7) * 0.15;
+                        // Rotación orgánica usando múltiples ondas
+                        idleRotY = organicNoise(idleTime, 0) * 0.25;
+                        idleRotX = organicNoise(idleTime, 100) * 0.12;
                         break;
                         
                     case 'look_sides':
-                        // Miran de lado a lado
-                        targetRotation.y = Math.sin(idleTime * 1.5) * 0.4;
-                        targetRotation.x = 0;
+                        // Mirar de lado a lado con variaciones de velocidad
+                        const lookSpeed = 1 + organicNoise(idleTime * 0.3, 50) * 0.3;
+                        idleRotY = Math.sin(idleTime * lookSpeed) * 0.35;
+                        idleRotX = organicNoise(idleTime * 0.5, 200) * 0.08;
                         break;
                         
                     case 'look_at_each_other':
-                        // Se miran entre ellos
-                        if (marcosModel && maruModel) {
-                            // Marcos mira a la derecha, Maru a la izquierda
-                            const lookAngle = 0.3;
-                            marcosModel.rotation.y = lookAngle + Math.sin(idleTime) * 0.05;
-                            marcosModel.rotation.x = Math.cos(idleTime * 0.5) * 0.05;
+                        // Se miran entre ellos con micro-movimientos
+                        const microMovement = organicNoise(idleTime * 1.5, 300) * 0.04;
+                        
+                        if (marcosModel) {
+                            const baseAngle = 0.3;
+                            marcosRotation.y += ((baseAngle + microMovement) - marcosRotation.y) * 0.03;
+                            marcosRotation.x += (organicNoise(idleTime * 0.8, 400) * 0.05 - marcosRotation.x) * 0.03;
                             
-                            maruModel.rotation.y = -lookAngle + Math.sin(idleTime) * 0.05;
-                            maruModel.rotation.x = Math.cos(idleTime * 0.5) * 0.05;
+                            marcosModel.rotation.y = marcosRotation.y;
+                            marcosModel.rotation.x = marcosRotation.x;
                         }
-                        // Saltar el resto de la lógica de rotación para este estado
+                        
+                        if (maruModel) {
+                            const baseAngle = -0.3;
+                            maruRotation.y += ((baseAngle + microMovement) - maruRotation.y) * 0.03;
+                            maruRotation.x += (organicNoise(idleTime * 0.8, 500) * 0.05 - maruRotation.x) * 0.03;
+                            
+                            maruModel.rotation.y = maruRotation.y;
+                            maruModel.rotation.x = maruRotation.x;
+                        }
+                        
                         renderer.render(scene, camera);
                         return;
                 }
+                
+                // Aplicar transición suave entre idle y mouse tracking
+                const easedProgress = easeInOutCubic(transitionProgress);
+                
+                // Para Marcos (sin delay)
+                if (isTransitioning) {
+                    marcosRotation.x += ((idleRotX * easedProgress + targetRotation.x * (1 - easedProgress)) - marcosRotation.x) * CONFIG.smoothness;
+                    marcosRotation.y += ((idleRotY * easedProgress + targetRotation.y * (1 - easedProgress)) - marcosRotation.y) * CONFIG.smoothness;
+                } else {
+                    marcosRotation.x += (idleRotX - marcosRotation.x) * CONFIG.smoothness;
+                    marcosRotation.y += (idleRotY - marcosRotation.y) * CONFIG.smoothness;
+                }
+                
+                // Para Maru (con delay)
+                const maruDelayFactor = CONFIG.maruDelay;
+                maruTargetRotation.x += (idleRotX - maruTargetRotation.x) * (1 - maruDelayFactor);
+                maruTargetRotation.y += (idleRotY - maruTargetRotation.y) * (1 - maruDelayFactor);
+                
+                if (isTransitioning) {
+                    maruRotation.x += ((maruTargetRotation.x * easedProgress + targetRotation.x * (1 - easedProgress)) - maruRotation.x) * CONFIG.smoothness;
+                    maruRotation.y += ((maruTargetRotation.y * easedProgress + targetRotation.y * (1 - easedProgress)) - maruRotation.y) * CONFIG.smoothness;
+                } else {
+                    maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
+                    maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
+                }
+                
+            } else {
+                // Modo mouse tracking
+                const easedProgress = isTransitioning ? easeInOutCubic(1 - transitionProgress) : 0;
+                
+                // Marcos responde directamente
+                marcosRotation.x += (targetRotation.x - marcosRotation.x) * CONFIG.smoothness;
+                marcosRotation.y += (targetRotation.y - marcosRotation.y) * CONFIG.smoothness;
+                
+                // Maru con delay
+                const maruDelayFactor = CONFIG.maruDelay;
+                maruTargetRotation.x += (targetRotation.x - maruTargetRotation.x) * (1 - maruDelayFactor);
+                maruTargetRotation.y += (targetRotation.y - maruTargetRotation.y) * (1 - maruDelayFactor);
+                
+                maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
+                maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
             }
 
-            // Smooth interpolation (para tracking y algunos estados idle)
-            currentRotation.x += (targetRotation.x - currentRotation.x) * CONFIG.smoothness;
-            currentRotation.y += (targetRotation.y - currentRotation.y) * CONFIG.smoothness;
-
-            // Apply rotation to both models (excepto en look_at_each_other que ya se maneja arriba)
+            // Apply rotations
             if (marcosModel) {
-                marcosModel.rotation.x = currentRotation.x;
-                marcosModel.rotation.y = currentRotation.y;
+                marcosModel.rotation.x = marcosRotation.x;
+                marcosModel.rotation.y = marcosRotation.y;
             }
             
             if (maruModel) {
-                maruModel.rotation.x = currentRotation.x;
-                maruModel.rotation.y = currentRotation.y;
+                maruModel.rotation.x = maruRotation.x;
+                maruModel.rotation.y = maruRotation.y;
             }
 
             renderer.render(scene, camera);
