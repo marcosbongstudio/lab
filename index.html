@@ -426,82 +426,59 @@
                 return;
             }
             
-            console.log('=== APLICANDO CAMBIOS DE COLOR ===');
-            console.log(`Valores: Rojo=${redAmount}, Naranja=${orangeAmount}, Amarillo=${yellowAmount}`);
+            console.log('=== APLICANDO DESATURACIÓN A TEXTURAS ===');
+            
+            // Promediamos para desaturación general
+            const desaturation = (redAmount + orangeAmount + yellowAmount) / 3;
+            
+            console.log(`Desaturación: ${(desaturation * 100).toFixed(0)}%`);
             
             let materialsProcessed = 0;
-            let colorsChanged = 0;
             
             model.traverse((child) => {
                 if (child.isMesh) {
-                    // Manejar tanto material único como array de materiales
                     const materials = Array.isArray(child.material) ? child.material : [child.material];
                     
-                    materials.forEach((material, idx) => {
-                        if (!material || !material.color) return;
+                    materials.forEach((material) => {
+                        if (!material) return;
                         
                         materialsProcessed++;
                         
-                        // Guardar color original si no existe
-                        const storageKey = `originalColor_${idx}`;
-                        if (!child.userData[storageKey]) {
-                            child.userData[storageKey] = material.color.clone();
-                            console.log(`💾 Guardando color original del material ${idx}`);
+                        // Guardar material original
+                        if (!material.userData.originalSaturation) {
+                            material.userData.originalSaturation = true;
                         }
                         
-                        const originalColor = child.userData[storageKey];
-                        const r = originalColor.r;
-                        const g = originalColor.g;
-                        const b = originalColor.b;
-                        
-                        console.log(`🎨 Material ${child.name || 'sin nombre'}[${idx}]: RGB(${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)})`);
-                        
-                        // Calcular luminosidad
-                        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-                        
-                        let desatAmount = 0;
-                        let colorType = 'OTRO';
-                        
-                        // Detección AGRESIVA de colores
-                        if (r > 0.3) {  // Tiene algo de rojo
-                            if (r > g * 1.2 && r > b * 1.2) {
-                                desatAmount = redAmount;
-                                colorType = '🔴 ROJO';
-                            } else if (g > 0.2) {
-                                desatAmount = orangeAmount;
-                                colorType = '🟠 NARANJA';
-                            }
-                        }
-                        
-                        if (g > 0.35 && r > 0.35 && b < 0.35) {
-                            desatAmount = Math.max(desatAmount, yellowAmount);
-                            colorType = '🟡 AMARILLO';
-                        }
-                        
-                        // APLICAR CAMBIO
-                        if (desatAmount > 0) {
-                            colorsChanged++;
+                        // Aplicar desaturación mediante onBeforeCompile
+                        // Esto modifica el shader para desaturar la textura
+                        material.onBeforeCompile = (shader) => {
+                            // Inyectar uniform de desaturación
+                            shader.uniforms.desaturation = { value: desaturation };
                             
-                            const newR = r + (luminance - r) * desatAmount;
-                            const newG = g + (luminance - g) * desatAmount;
-                            const newB = b + (luminance - b) * desatAmount;
+                            // Modificar el fragment shader para aplicar desaturación
+                            shader.fragmentShader = shader.fragmentShader.replace(
+                                '#include <color_fragment>',
+                                `
+                                #include <color_fragment>
+                                
+                                // Aplicar desaturación
+                                float gray = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+                                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(gray), desaturation);
+                                `
+                            );
                             
-                            material.color.setRGB(newR, newG, newB);
-                            material.needsUpdate = true;
-                            
-                            console.log(`  ✓ ${colorType} detectado → Desaturando ${(desatAmount*100).toFixed(0)}%`);
-                            console.log(`    Antes: (${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)})`);
-                            console.log(`    Después: (${newR.toFixed(2)}, ${newG.toFixed(2)}, ${newB.toFixed(2)})`);
-                        } else {
-                            // Restaurar original
-                            material.color.copy(originalColor);
-                            material.needsUpdate = true;
-                        }
+                            // Agregar uniform al principio
+                            shader.fragmentShader = 'uniform float desaturation;\n' + shader.fragmentShader;
+                        };
+                        
+                        material.needsUpdate = true;
+                        
+                        console.log(`✓ Material actualizado con desaturación ${(desaturation*100).toFixed(0)}%`);
                     });
                 }
             });
             
-            console.log(`\n✅ RESUMEN: ${materialsProcessed} materiales procesados, ${colorsChanged} colores modificados\n`);
+            console.log(`\n✅ ${materialsProcessed} materiales procesados\n`);
             console.log('=====================================\n');
         }
 
