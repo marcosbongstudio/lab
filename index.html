@@ -103,6 +103,14 @@
             🎨 Aplicar Colores
         </button>
         
+        <button id="test-all" style="width: 100%; padding: 10px; background: #FF9800; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; margin-top: 8px;">
+            🧪 TEST: Desaturar TODO
+        </button>
+        
+        <button id="reset-colors" style="width: 100%; padding: 8px; background: #f44336; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
+            ↺ Restaurar Originales
+        </button>
+        
         <button id="toggle-panel" style="width: 100%; padding: 8px; background: #666; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
             👁️ Ocultar Panel
         </button>
@@ -354,10 +362,41 @@
                 const orangeAmount = parseFloat(controls.desaturateOrange.value);
                 const yellowAmount = parseFloat(controls.desaturateYellow.value);
                 
+                console.clear();
+                console.log('🎨 Aplicando colores con valores personalizados...\n');
+                
                 applyColorChanges(marcosModel, redAmount, orangeAmount, yellowAmount);
                 applyColorChanges(maruModel, redAmount, orangeAmount, yellowAmount);
                 
                 document.getElementById('color-info').textContent = '✓ Colores aplicados!';
+                setTimeout(() => {
+                    document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
+                }, 2000);
+            });
+            
+            // TEST: Desaturar TODO
+            document.getElementById('test-all').addEventListener('click', () => {
+                console.clear();
+                console.log('🧪 MODO TEST: Desaturando TODO al 100%\n');
+                
+                applyColorChanges(marcosModel, 1.0, 1.0, 1.0);
+                applyColorChanges(maruModel, 1.0, 1.0, 1.0);
+                
+                document.getElementById('color-info').textContent = '🧪 TEST aplicado - Todo desaturado al 100%';
+                setTimeout(() => {
+                    document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
+                }, 2000);
+            });
+            
+            // Restaurar colores originales
+            document.getElementById('reset-colors').addEventListener('click', () => {
+                console.clear();
+                console.log('↺ Restaurando colores originales...\n');
+                
+                applyColorChanges(marcosModel, 0, 0, 0);
+                applyColorChanges(maruModel, 0, 0, 0);
+                
+                document.getElementById('color-info').textContent = '↺ Colores originales restaurados';
                 setTimeout(() => {
                     document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
                 }, 2000);
@@ -382,53 +421,88 @@
         
         // Aplicar cambios de color a un modelo
         function applyColorChanges(model, redAmount, orangeAmount, yellowAmount) {
-            if (!model) return;
+            if (!model) {
+                console.log('❌ Modelo no disponible');
+                return;
+            }
+            
+            console.log('=== APLICANDO CAMBIOS DE COLOR ===');
+            console.log(`Valores: Rojo=${redAmount}, Naranja=${orangeAmount}, Amarillo=${yellowAmount}`);
+            
+            let materialsProcessed = 0;
+            let colorsChanged = 0;
             
             model.traverse((child) => {
-                if (child.isMesh && child.material && child.material.color && child.userData.originalColor) {
-                    // Usar el color original guardado
-                    const originalColor = child.userData.originalColor;
-                    const originalR = originalColor.r;
-                    const originalG = originalColor.g;
-                    const originalB = originalColor.b;
+                if (child.isMesh) {
+                    // Manejar tanto material único como array de materiales
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
                     
-                    // Calcular luminosidad
-                    const luminance = 0.299 * originalR + 0.587 * originalG + 0.114 * originalB;
-                    
-                    let desatAmount = 0;
-                    
-                    // Detectar tipo de color y aplicar desaturación correspondiente
-                    if (originalR > originalG && originalR > originalB) {
-                        // Rojo dominante
-                        const redIntensity = originalR - Math.max(originalG, originalB);
+                    materials.forEach((material, idx) => {
+                        if (!material || !material.color) return;
                         
-                        if (redIntensity > 0.3) {
-                            // Rojo fuerte
-                            desatAmount = redAmount;
-                            console.log('Rojo detectado:', originalR, originalG, originalB);
-                        } else if (originalR > 0.4 && originalG > 0.2 && originalG < originalR * 0.8) {
-                            // Naranja (rojo con algo de verde)
-                            desatAmount = orangeAmount;
-                            console.log('Naranja detectado:', originalR, originalG, originalB);
+                        materialsProcessed++;
+                        
+                        // Guardar color original si no existe
+                        const storageKey = `originalColor_${idx}`;
+                        if (!child.userData[storageKey]) {
+                            child.userData[storageKey] = material.color.clone();
+                            console.log(`💾 Guardando color original del material ${idx}`);
                         }
-                    } else if (originalR > 0.5 && originalG > 0.4 && originalB < 0.4) {
-                        // Amarillo/naranja amarillento
-                        desatAmount = yellowAmount;
-                        console.log('Amarillo detectado:', originalR, originalG, originalB);
-                    }
-                    
-                    if (desatAmount > 0) {
-                        // Aplicar desaturación al color actual
-                        const color = child.material.color;
-                        color.r = originalR + (luminance - originalR) * desatAmount;
-                        color.g = originalG + (luminance - originalG) * desatAmount;
-                        color.b = originalB + (luminance - originalB) * desatAmount;
-                    } else {
-                        // Restaurar color original si no se aplica desaturación
-                        child.material.color.copy(originalColor);
-                    }
+                        
+                        const originalColor = child.userData[storageKey];
+                        const r = originalColor.r;
+                        const g = originalColor.g;
+                        const b = originalColor.b;
+                        
+                        console.log(`🎨 Material ${child.name || 'sin nombre'}[${idx}]: RGB(${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)})`);
+                        
+                        // Calcular luminosidad
+                        const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+                        
+                        let desatAmount = 0;
+                        let colorType = 'OTRO';
+                        
+                        // Detección AGRESIVA de colores
+                        if (r > 0.3) {  // Tiene algo de rojo
+                            if (r > g * 1.2 && r > b * 1.2) {
+                                desatAmount = redAmount;
+                                colorType = '🔴 ROJO';
+                            } else if (g > 0.2) {
+                                desatAmount = orangeAmount;
+                                colorType = '🟠 NARANJA';
+                            }
+                        }
+                        
+                        if (g > 0.35 && r > 0.35 && b < 0.35) {
+                            desatAmount = Math.max(desatAmount, yellowAmount);
+                            colorType = '🟡 AMARILLO';
+                        }
+                        
+                        // APLICAR CAMBIO
+                        if (desatAmount > 0) {
+                            colorsChanged++;
+                            
+                            const newR = r + (luminance - r) * desatAmount;
+                            const newG = g + (luminance - g) * desatAmount;
+                            const newB = b + (luminance - b) * desatAmount;
+                            
+                            material.color.setRGB(newR, newG, newB);
+                            material.needsUpdate = true;
+                            
+                            console.log(`  ✓ ${colorType} detectado → Desaturando ${(desatAmount*100).toFixed(0)}%`);
+                            console.log(`    Antes: (${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)})`);
+                            console.log(`    Después: (${newR.toFixed(2)}, ${newG.toFixed(2)}, ${newB.toFixed(2)})`);
+                        } else {
+                            // Restaurar original
+                            material.color.copy(originalColor);
+                            material.needsUpdate = true;
+                        }
+                    });
                 }
             });
+            
+            console.log(`\n✅ RESUMEN: ${materialsProcessed} materiales procesados, ${colorsChanged} colores modificados\n`);
+            console.log('=====================================\n');
         }
 
         // Load individual model
@@ -493,11 +567,7 @@
                     loadingEl.style.display = 'none';
                 }, 1500);
                 console.log('✓ Ambos modelos cargados');
-                
-                // Aplicar desaturación inicial
-                setTimeout(() => {
-                    document.getElementById('apply-colors').click();
-                }, 500);
+                console.log('👉 Usá el panel de control para ajustar colores');
             } else {
                 loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
             }
