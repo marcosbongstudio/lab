@@ -1,465 +1,138 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Marcos y Maru</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            width: 100vw;
-            height: 100vh;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: transparent;
-        }
-        
-        #container {
-            width: 100%;
-            height: 100%;
-        }
-        
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px 40px;
-            border-radius: 12px;
-            font-weight: 600;
-            color: #333;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10;
-        }
-        
-        #error {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #fee;
-            border: 2px solid #fcc;
-            padding: 20px 40px;
-            border-radius: 12px;
-            color: #c33;
-            max-width: 400px;
-            font-weight: 600;
-            display: none;
-            z-index: 10;
-        }
-    </style>
-</head>
-<body>
-    <div id="container"></div>
-    <div id="loading">Cargando personajes...</div>
-    <div id="error"></div>
+# Panel de Control - Guía Rápida 🎛️
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
-    
-    <script>
-        // CONFIGURACIÓN
-        const CONFIG = {
-            marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
-            maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
-            backgroundColor: 'transparent',
-            spacing: 3.5,                
-            headSensitivity: 0.6,        
-            headSensitivityY: 0.4,       
-            smoothness: 0.05,            
-            modelScale: 3,               
-            idleEnabled: true,           
-            idleSpeed: 0.3,              
-            maruDelay: 0.15,             // Delay de Maru respecto a Marcos (0-1, más alto = más delay)
-            desaturateReds: 1,         // Desaturación de rojos (0 = nada, 1 = total) - Aumentado para menos rojo
-        };
+## ¡Ahora podés ajustar todo en tiempo real!
 
-        const container = document.getElementById('container');
-        const loadingEl = document.getElementById('loading');
-        const errorEl = document.getElementById('error');
-        
-        const mouse = { x: 0, y: 0 };
-        const targetRotation = { x: 0, y: 0 };
-        
-        // Rotaciones separadas para cada personaje
-        const marcosRotation = { x: 0, y: 0 };
-        const maruRotation = { x: 0, y: 0 };
-        const maruTargetRotation = { x: 0, y: 0 };
-        
-        // Sistema de animaciones idle
-        let isIdle = true;
-        let isTransitioning = false;
-        let transitionProgress = 0;
-        let idleState = 'rotate';
-        let idleTime = 0;
-        let idleStateTime = 0;
-        let lastMouseMoveTime = Date.now();
-        const IDLE_TIMEOUT = 2000;
-        const IDLE_STATE_DURATION = 5000;  // Aumentado a 5 segundos
-        const TRANSITION_SPEED = 0.02;  // Velocidad de transición suave
-        
-        let scene, camera, renderer;
-        let marcosModel, maruModel;
-        let modelsLoaded = 0;
-        
-        // Función para generar movimiento orgánico (pseudo-Perlin noise)
-        function organicNoise(time, seed = 0) {
-            const t = time + seed;
-            return (
-                Math.sin(t * 0.7) * 0.5 +
-                Math.sin(t * 1.3) * 0.3 +
-                Math.sin(t * 2.1) * 0.15 +
-                Math.sin(t * 0.4) * 0.05
-            );
-        }
-        
-        // Función de easing para transiciones suaves
-        function easeInOutCubic(t) {
-            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        }
+Cuando cargue la página, vas a ver un **panel de control en la esquina superior derecha** con sliders para ajustar todo.
 
-        // Setup escena
-        function init() {
-            // Scene
-            scene = new THREE.Scene();
-            
-            if (CONFIG.backgroundColor !== 'transparent') {
-                scene.background = new THREE.Color(CONFIG.backgroundColor);
-            }
+---
 
-            // Camera
-            camera = new THREE.PerspectiveCamera(
-                45,
-                window.innerWidth / window.innerHeight,
-                0.1,
-                1000
-            );
-            camera.position.z = 8;
+## Controles Disponibles:
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-            
-            // Tone mapping reducido para menos contraste
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;  // Reducido de 1.3
-            
-            container.appendChild(renderer.domElement);
+### 🎨 **Desaturación de Colores**
 
-            // Lights - Reducidas para menos brillo
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);  // Reducido de 2.0
-            scene.add(ambientLight);
+**Desaturar Rojos (0-1):**
+- Afecta los rojos puros e intensos
+- Probá con 0.7 primero
+- Si seguís viendo mucho rojo, subilo a 0.9
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
-            directionalLight1.position.set(5, 5, 5);
-            scene.add(directionalLight1);
+**Desaturar Naranjas (0-1):**
+- Afecta tonos naranja (rojo + verde)
+- Empezá con 0.5
+- Los tonos piel suelen estar acá
 
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);  // Reducido de 1.2
-            directionalLight2.position.set(-5, 3, -3);
-            scene.add(directionalLight2);
+**Desaturar Amarillos (0-1):**
+- Afecta amarillos y naranjas amarillentos
+- Probá con 0.3-0.5
 
-            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.4);  // Reducido de 0.8
-            directionalLight3.position.set(0, -5, 0);
-            scene.add(directionalLight3);
-            
-            const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
-            frontLight.position.set(0, 0, 10);
-            scene.add(frontLight);
-            
-            const topLight = new THREE.DirectionalLight(0xffffff, 0.5);  // Reducido de 1.0
-            topLight.position.set(0, 10, 0);
-            scene.add(topLight);
+### 💡 **Iluminación y Visuales**
 
-            // Load models
-            loadModel(CONFIG.marcosURL, -CONFIG.spacing / 2, (model) => {
-                marcosModel = model;
-                checkModelsLoaded();
-            });
+**Brillo General (0.5-1.5):**
+- 1.0 = normal
+- <1.0 = más oscuro
+- >1.0 = más brillante
+- Se aplica instantáneamente
 
-            loadModel(CONFIG.maruURL, CONFIG.spacing / 2, (model) => {
-                maruModel = model;
-                checkModelsLoaded();
-            });
+**Separación (2-5):**
+- Distancia entre los personajes
+- Se aplica instantáneamente
 
-            // Mouse tracking con transiciones suaves
-            const updateMousePosition = (x, y) => {
-                mouse.x = x;
-                mouse.y = y;
-                targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
-                
-                // Resetear idle y comenzar transición
-                lastMouseMoveTime = Date.now();
-                if (isIdle) {
-                    isIdle = false;
-                    isTransitioning = true;
-                    transitionProgress = 0;
-                }
-            };
+### 🎮 **Comportamiento**
 
-            window.addEventListener('mousemove', (event) => {
-                const x = (event.clientX / window.innerWidth) * 2 - 1;
-                const y = -(event.clientY / window.innerHeight) * 2 + 1;
-                updateMousePosition(x, y);
-            });
+**Sensibilidad Mouse (0.2-1.0):**
+- Qué tanto rotan al seguir el cursor
+- Se aplica instantáneamente
 
-            window.addEventListener('touchmove', (event) => {
-                if (event.touches.length > 0) {
-                    const touch = event.touches[0];
-                    const x = (touch.clientX / window.innerWidth) * 2 - 1;
-                    const y = -(touch.clientY / window.innerHeight) * 2 + 1;
-                    updateMousePosition(x, y);
-                }
-            });
+**Delay Maru (0-0.5):**
+- Delay de María respecto a Marcos
+- 0 = sincronizados
+- 0.15 = delay sutil
+- 0.3 = muy notorio
+- Se aplica instantáneamente
 
-            // Mensajes desde parent (para wrapper)
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'mousemove') {
-                    console.log('Mensaje recibido:', event.data.x.toFixed(2), event.data.y.toFixed(2));
-                    updateMousePosition(event.data.x, event.data.y);
-                }
-            });
+---
 
-            // Resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+## Cómo Usar:
 
-            // Start animation
-            animate();
-            
-            console.log('Personajes 3D listos - esperando eventos de mouse');
-        }
+1. **Moviendo los sliders:**
+   - Algunos se aplican instantáneamente (brillo, separación, sensibilidad, delay)
+   - Los de color necesitan que clickees "Aplicar Colores"
 
-        // Load individual model
-        function loadModel(url, xPosition, callback) {
-            const loader = new THREE.GLTFLoader();
-            
-            loader.load(
-                url,
-                (gltf) => {
-                    const model = gltf.scene;
+2. **Para ajustar colores:**
+   - Movete los sliders de desaturación
+   - Clickeá el botón verde **"🎨 Aplicar Colores"**
+   - Vas a ver los cambios inmediatamente
+   - En la consola (F12) vas a ver qué colores detectó
 
-                    // Center and scale
-                    const box = new THREE.Box3().setFromObject(model);
-                    const center = box.getCenter(new THREE.Vector3());
-                    const size = box.getSize(new THREE.Vector3());
+3. **Ocultar el panel:**
+   - Clickeá "👁️ Ocultar Panel" para que no tape la vista
+   - Se oculta hacia la derecha
+   - Clickeá "👁️ Mostrar Panel" para volver a verlo
 
-                    console.log(`Modelo cargado en posición ${xPosition}. Tamaño:`, size);
+---
 
-                    const maxDim = Math.max(size.x, size.y, size.z);
-                    const scale = CONFIG.modelScale / maxDim;
-                    model.scale.multiplyScalar(scale);
-                    model.position.sub(center.multiplyScalar(scale));
-                    model.position.x = xPosition;
+## Tips para Encontrar los Valores Correctos:
 
-                    // Mejorar materiales - Menos brillo y desaturar rojos
-                    model.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            // Reducido el emissive para menos brillo artificial
-                            child.material.emissive = new THREE.Color(0x111111);
-                            child.material.emissiveIntensity = 0.15;
-                            
-                            // Desaturar rojos/naranjas
-                            if (child.material.color) {
-                                const color = child.material.color;
-                                const r = color.r;
-                                const g = color.g;
-                                const b = color.b;
-                                
-                                // Detectar si es un color rojizo (más rojo que verde/azul)
-                                if (r > g && r > b && r > 0.5) {
-                                    // Calcular luminosidad
-                                    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-                                    
-                                    // Interpolar hacia escala de grises
-                                    color.r = r + (luminance - r) * CONFIG.desaturateReds;
-                                    color.g = g + (luminance - g) * CONFIG.desaturateReds;
-                                    color.b = b + (luminance - b) * CONFIG.desaturateReds;
-                                }
-                            }
-                        }
-                    });
+### Si los rojos siguen muy intensos:
 
-                    scene.add(model);
-                    callback(model);
-                },
-                (progress) => {
-                    if (progress.total > 0) {
-                        const percent = Math.round((progress.loaded / progress.total) * 100);
-                        console.log(`Cargando modelo en ${xPosition}: ${percent}%`);
-                    }
-                },
-                (error) => {
-                    console.error(`Error cargando modelo en ${xPosition}:`, error);
-                    errorEl.textContent = 'Error cargando uno de los personajes';
-                    errorEl.style.display = 'block';
-                    loadingEl.style.display = 'none';
-                }
-            );
-        }
+1. Empezá con estos valores:
+   ```
+   Rojos: 0.8
+   Naranjas: 0.5
+   Amarillos: 0.3
+   ```
 
-        function checkModelsLoaded() {
-            modelsLoaded++;
-            if (modelsLoaded === 2) {
-                loadingEl.textContent = '¡Listo!';
-                setTimeout(() => {
-                    loadingEl.style.display = 'none';
-                }, 1500);
-                console.log('✓ Ambos modelos cargados');
-            } else {
-                loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
-            }
-        }
+2. Clickeá "Aplicar Colores"
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
+3. Si no alcanza, probá:
+   ```
+   Rojos: 0.95
+   Naranjas: 0.7
+   Amarillos: 0.5
+   ```
 
-            const currentTime = Date.now();
-            const timeSinceMouseMove = currentTime - lastMouseMoveTime;
-            
-            // Detectar si debemos entrar en modo idle
-            if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle && !isTransitioning) {
-                isIdle = true;
-                isTransitioning = true;
-                transitionProgress = 0;
-                idleStateTime = currentTime;
-                console.log('Entrando en modo idle');
-            }
-            
-            // Manejar transiciones suaves
-            if (isTransitioning) {
-                transitionProgress += TRANSITION_SPEED;
-                if (transitionProgress >= 1) {
-                    transitionProgress = 1;
-                    isTransitioning = false;
-                }
-            }
-            
-            if (isIdle) {
-                // Cambiar de estado idle cada cierto tiempo
-                if (currentTime - idleStateTime > IDLE_STATE_DURATION) {
-                    const states = ['rotate', 'look_sides', 'look_at_each_other'];
-                    const currentIndex = states.indexOf(idleState);
-                    idleState = states[(currentIndex + 1) % states.length];
-                    idleStateTime = currentTime;
-                    console.log('Nuevo estado idle:', idleState);
-                }
-                
-                idleTime += 0.016 * CONFIG.idleSpeed;
-                
-                // Calcular rotaciones idle con movimiento orgánico
-                let idleRotX = 0;
-                let idleRotY = 0;
-                
-                switch(idleState) {
-                    case 'rotate':
-                        // Rotación orgánica usando múltiples ondas
-                        idleRotY = organicNoise(idleTime, 0) * 0.25;
-                        idleRotX = organicNoise(idleTime, 100) * 0.12;
-                        break;
-                        
-                    case 'look_sides':
-                        // Mirar de lado a lado con variaciones de velocidad
-                        const lookSpeed = 1 + organicNoise(idleTime * 0.3, 50) * 0.3;
-                        idleRotY = Math.sin(idleTime * lookSpeed) * 0.35;
-                        idleRotX = organicNoise(idleTime * 0.5, 200) * 0.08;
-                        break;
-                        
-                    case 'look_at_each_other':
-                        // Se miran entre ellos con micro-movimientos
-                        const microMovement = organicNoise(idleTime * 1.5, 300) * 0.04;
-                        
-                        if (marcosModel) {
-                            const baseAngle = 0.3;
-                            marcosRotation.y += ((baseAngle + microMovement) - marcosRotation.y) * 0.03;
-                            marcosRotation.x += (organicNoise(idleTime * 0.8, 400) * 0.05 - marcosRotation.x) * 0.03;
-                            
-                            marcosModel.rotation.y = marcosRotation.y;
-                            marcosModel.rotation.x = marcosRotation.x;
-                        }
-                        
-                        if (maruModel) {
-                            const baseAngle = -0.3;
-                            maruRotation.y += ((baseAngle + microMovement) - maruRotation.y) * 0.03;
-                            maruRotation.x += (organicNoise(idleTime * 0.8, 500) * 0.05 - maruRotation.x) * 0.03;
-                            
-                            maruModel.rotation.y = maruRotation.y;
-                            maruModel.rotation.x = maruRotation.x;
-                        }
-                        
-                        renderer.render(scene, camera);
-                        return;
-                }
-                
-                // Aplicar transición suave entre idle y mouse tracking
-                const easedProgress = easeInOutCubic(transitionProgress);
-                
-                // Para Marcos (sin delay)
-                if (isTransitioning) {
-                    marcosRotation.x += ((idleRotX * easedProgress + targetRotation.x * (1 - easedProgress)) - marcosRotation.x) * CONFIG.smoothness;
-                    marcosRotation.y += ((idleRotY * easedProgress + targetRotation.y * (1 - easedProgress)) - marcosRotation.y) * CONFIG.smoothness;
-                } else {
-                    marcosRotation.x += (idleRotX - marcosRotation.x) * CONFIG.smoothness;
-                    marcosRotation.y += (idleRotY - marcosRotation.y) * CONFIG.smoothness;
-                }
-                
-                // Para Maru (con delay)
-                const maruDelayFactor = CONFIG.maruDelay;
-                maruTargetRotation.x += (idleRotX - maruTargetRotation.x) * (1 - maruDelayFactor);
-                maruTargetRotation.y += (idleRotY - maruTargetRotation.y) * (1 - maruDelayFactor);
-                
-                if (isTransitioning) {
-                    maruRotation.x += ((maruTargetRotation.x * easedProgress + targetRotation.x * (1 - easedProgress)) - maruRotation.x) * CONFIG.smoothness;
-                    maruRotation.y += ((maruTargetRotation.y * easedProgress + targetRotation.y * (1 - easedProgress)) - maruRotation.y) * CONFIG.smoothness;
-                } else {
-                    maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
-                    maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
-                }
-                
-            } else {
-                // Modo mouse tracking
-                const easedProgress = isTransitioning ? easeInOutCubic(1 - transitionProgress) : 0;
-                
-                // Marcos responde directamente
-                marcosRotation.x += (targetRotation.x - marcosRotation.x) * CONFIG.smoothness;
-                marcosRotation.y += (targetRotation.y - marcosRotation.y) * CONFIG.smoothness;
-                
-                // Maru con delay
-                const maruDelayFactor = CONFIG.maruDelay;
-                maruTargetRotation.x += (targetRotation.x - maruTargetRotation.x) * (1 - maruDelayFactor);
-                maruTargetRotation.y += (targetRotation.y - maruTargetRotation.y) * (1 - maruDelayFactor);
-                
-                maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
-                maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
-            }
+### Para tonos piel muy rosados:
 
-            // Apply rotations
-            if (marcosModel) {
-                marcosModel.rotation.x = marcosRotation.x;
-                marcosModel.rotation.y = marcosRotation.y;
-            }
-            
-            if (maruModel) {
-                maruModel.rotation.x = maruRotation.x;
-                maruModel.rotation.y = maruRotation.y;
-            }
+- Los tonos piel suelen ser **naranjas**
+- Subí "Desaturar Naranjas" a 0.7-0.8
+- Dejá "Rojos" moderado (0.5-0.6)
 
-            renderer.render(scene, camera);
-        }
+### Para cachetes/labios muy rojos:
 
-        // Iniciar
-        window.addEventListener('load', init);
-    </script>
-</body>
-</html>
+- Esos suelen ser **rojos puros**
+- Subí "Desaturar Rojos" a 0.9-0.95
+
+---
+
+## Debugging:
+
+Abrí la consola del navegador (F12) y cuando clickees "Aplicar Colores" vas a ver mensajes como:
+
+```
+Rojo detectado: 0.85 0.32 0.21
+Naranja detectado: 0.73 0.48 0.29
+```
+
+Esto te dice qué colores está detectando y en qué categoría los pone.
+
+---
+
+## Workflow Recomendado:
+
+1. Cargá la página
+2. Abrí la consola (F12) para ver qué detecta
+3. Movete todos los sliders de color a 0
+4. Clickeá "Aplicar Colores" (para ver los colores originales)
+5. Subí de a poco cada slider:
+   - Primero "Rojos" hasta que veas cambios
+   - Después "Naranjas"
+   - Por último "Amarillos"
+6. Cuando des con los valores perfectos, anotá los números
+7. Después los ponemos en el código final
+
+---
+
+## Una vez que encuentres los valores ideales:
+
+Decime los números y los pongo directamente en el código, así no tenés que ajustarlos cada vez. Después volamos el panel de control.
+
+🎯 **El objetivo:** Encontrar los valores perfectos experimentando en vivo, sin tener que editar código y subir a GitHub cada vez.
