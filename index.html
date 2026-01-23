@@ -69,11 +69,13 @@
             marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
             backgroundColor: 'transparent',
-            spacing: 2.5,                // Distancia entre personajes
-            headSensitivity: 0.6,        // Rotación horizontal
-            headSensitivityY: 0.4,       // Rotación vertical
-            smoothness: 0.05,            // Suavidad del movimiento
-            modelScale: 3,               // Escala de los modelos
+            spacing: 3.5,                // Aumentado para que no se solapen las orejas
+            headSensitivity: 0.6,        
+            headSensitivityY: 0.4,       
+            smoothness: 0.05,            
+            modelScale: 3,               
+            idleEnabled: true,           // Activar animaciones idle
+            idleSpeed: 0.3,              // Velocidad de las animaciones idle
         };
 
         const container = document.getElementById('container');
@@ -83,6 +85,15 @@
         const mouse = { x: 0, y: 0 };
         const targetRotation = { x: 0, y: 0 };
         const currentRotation = { x: 0, y: 0 };
+        
+        // Sistema de animaciones idle
+        let isIdle = true;
+        let idleState = 'rotate';  // Estados: 'rotate', 'look_sides', 'look_at_each_other'
+        let idleTime = 0;
+        let idleStateTime = 0;
+        let lastMouseMoveTime = Date.now();
+        const IDLE_TIMEOUT = 2000;  // 2 segundos sin mouse = idle
+        const IDLE_STATE_DURATION = 4000;  // Cambiar de estado idle cada 4 segundos
         
         let scene, camera, renderer;
         let marcosModel, maruModel;
@@ -111,33 +122,33 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             
-            // Tone mapping para mejor contraste
+            // Tone mapping reducido para menos contraste
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.3;
+            renderer.toneMappingExposure = 1.0;  // Reducido de 1.3
             
             container.appendChild(renderer.domElement);
 
-            // Lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
+            // Lights - Reducidas para menos brillo
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);  // Reducido de 2.0
             scene.add(ambientLight);
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.5);
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
             directionalLight1.position.set(5, 5, 5);
             scene.add(directionalLight1);
 
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.2);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);  // Reducido de 1.2
             directionalLight2.position.set(-5, 3, -3);
             scene.add(directionalLight2);
 
-            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.8);
+            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.4);  // Reducido de 0.8
             directionalLight3.position.set(0, -5, 0);
             scene.add(directionalLight3);
             
-            const frontLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
             frontLight.position.set(0, 0, 10);
             scene.add(frontLight);
             
-            const topLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.5);  // Reducido de 1.0
             topLight.position.set(0, 10, 0);
             scene.add(topLight);
 
@@ -158,6 +169,10 @@
                 mouse.y = y;
                 targetRotation.y = mouse.x * CONFIG.headSensitivity;
                 targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
+                
+                // Resetear idle cuando hay movimiento del mouse
+                lastMouseMoveTime = Date.now();
+                isIdle = false;
             };
 
             window.addEventListener('mousemove', (event) => {
@@ -218,15 +233,15 @@
                     model.position.sub(center.multiplyScalar(scale));
                     model.position.x = xPosition;
 
-                    // Mejorar materiales
+                    // Mejorar materiales - Menos brillo
                     model.traverse((child) => {
                         if (child.isMesh && child.material) {
-                            child.material.emissive = new THREE.Color(0x333333);
-                            child.material.emissiveIntensity = 0.4;
+                            // Reducido el emissive para menos brillo artificial
+                            child.material.emissive = new THREE.Color(0x111111);  // Reducido de 0x333333
+                            child.material.emissiveIntensity = 0.15;  // Reducido de 0.4
                             
-                            if (child.material.color) {
-                                child.material.color.multiplyScalar(1.2);
-                            }
+                            // No aumentar más el brillo de los colores
+                            // Comentado: child.material.color.multiplyScalar(1.2);
                         }
                     });
 
@@ -265,11 +280,64 @@
         function animate() {
             requestAnimationFrame(animate);
 
-            // Smooth interpolation
+            const currentTime = Date.now();
+            const timeSinceMouseMove = currentTime - lastMouseMoveTime;
+            
+            // Detectar si debemos entrar en modo idle
+            if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle) {
+                isIdle = true;
+                idleStateTime = currentTime;
+                console.log('Entrando en modo idle');
+            }
+            
+            if (isIdle) {
+                // Cambiar de estado idle cada cierto tiempo
+                if (currentTime - idleStateTime > IDLE_STATE_DURATION) {
+                    const states = ['rotate', 'look_sides', 'look_at_each_other'];
+                    const currentIndex = states.indexOf(idleState);
+                    idleState = states[(currentIndex + 1) % states.length];
+                    idleStateTime = currentTime;
+                    console.log('Nuevo estado idle:', idleState);
+                }
+                
+                idleTime += 0.016 * CONFIG.idleSpeed;  // ~60fps
+                
+                // Animaciones idle según el estado
+                switch(idleState) {
+                    case 'rotate':
+                        // Ambos rotan lentamente en círculo
+                        targetRotation.y = Math.sin(idleTime) * 0.3;
+                        targetRotation.x = Math.cos(idleTime * 0.7) * 0.15;
+                        break;
+                        
+                    case 'look_sides':
+                        // Miran de lado a lado
+                        targetRotation.y = Math.sin(idleTime * 1.5) * 0.4;
+                        targetRotation.x = 0;
+                        break;
+                        
+                    case 'look_at_each_other':
+                        // Se miran entre ellos
+                        if (marcosModel && maruModel) {
+                            // Marcos mira a la derecha, Maru a la izquierda
+                            const lookAngle = 0.3;
+                            marcosModel.rotation.y = lookAngle + Math.sin(idleTime) * 0.05;
+                            marcosModel.rotation.x = Math.cos(idleTime * 0.5) * 0.05;
+                            
+                            maruModel.rotation.y = -lookAngle + Math.sin(idleTime) * 0.05;
+                            maruModel.rotation.x = Math.cos(idleTime * 0.5) * 0.05;
+                        }
+                        // Saltar el resto de la lógica de rotación para este estado
+                        renderer.render(scene, camera);
+                        return;
+                }
+            }
+
+            // Smooth interpolation (para tracking y algunos estados idle)
             currentRotation.x += (targetRotation.x - currentRotation.x) * CONFIG.smoothness;
             currentRotation.y += (targetRotation.y - currentRotation.y) * CONFIG.smoothness;
 
-            // Apply rotation to both models
+            // Apply rotation to both models (excepto en look_at_each_other que ya se maneja arriba)
             if (marcosModel) {
                 marcosModel.rotation.x = currentRotation.x;
                 marcosModel.rotation.y = currentRotation.y;
