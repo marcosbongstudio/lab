@@ -59,53 +59,6 @@
     <div id="container"></div>
     <div id="loading">Cargando personajes...</div>
     <div id="error"></div>
-    
-    <!-- Panel de Control -->
-    <div id="controls" style="position: fixed; top: 10px; right: 10px; background: rgba(0,0,0,0.85); color: white; padding: 20px; border-radius: 12px; font-family: monospace; font-size: 12px; max-height: 90vh; overflow-y: auto; z-index: 1000; min-width: 280px;">
-        <h3 style="margin: 0 0 15px 0; font-size: 14px; border-bottom: 1px solid #666; padding-bottom: 8px;">🎛️ Controles</h3>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Desaturación General: <span id="val-desat">0.5</span></label>
-            <input type="range" id="desaturation" min="0" max="1" step="0.05" value="0.5" style="width: 100%;">
-            <div style="font-size: 10px; opacity: 0.7; margin-top: 4px;">0 = color completo, 1 = escala de grises</div>
-        </div>
-        
-        <div style="margin-bottom: 15px; border-top: 1px solid #444; padding-top: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Brillo General: <span id="val-brightness">1.0</span></label>
-            <input type="range" id="brightness" min="0.5" max="1.5" step="0.05" value="1.0" style="width: 100%;">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Separación: <span id="val-spacing">3.5</span></label>
-            <input type="range" id="spacing" min="2" max="5" step="0.1" value="3.5" style="width: 100%;">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Sensibilidad Mouse: <span id="val-sensitivity">0.6</span></label>
-            <input type="range" id="sensitivity" min="0.2" max="1" step="0.05" value="0.6" style="width: 100%;">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Delay Maru: <span id="val-delay">0.15</span></label>
-            <input type="range" id="delay" min="0" max="0.5" step="0.05" value="0.15" style="width: 100%;">
-        </div>
-        
-        <button id="apply-colors" style="width: 100%; padding: 10px; background: #4CAF50; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; margin-top: 10px;">
-            🎨 Aplicar Desaturación
-        </button>
-        
-        <button id="reset-colors" style="width: 100%; padding: 8px; background: #f44336; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
-            ↺ Color Original (0%)
-        </button>
-        
-        <button id="toggle-panel" style="width: 100%; padding: 8px; background: #666; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
-            👁️ Ocultar Panel
-        </button>
-        
-        <div id="color-info" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #444; font-size: 10px; opacity: 0.7;">
-            💡 La desaturación se aplica al mover el slider
-        </div>
-    </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
@@ -117,14 +70,13 @@
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
             backgroundColor: 'transparent',
             spacing: 3.5,                
-            headSensitivity: 0.6,        
-            headSensitivityY: 0.4,       
+            headSensitivity: 1.0,        // Sensibilidad máxima (del panel)
+            headSensitivityY: 0.67,      // 67% del horizontal
             smoothness: 0.05,            
             modelScale: 3,               
             idleEnabled: true,           
             idleSpeed: 0.3,              
-            maruDelay: 0.15,             // Delay de Maru respecto a Marcos (0-1, más alto = más delay)
-            desaturateReds: 0.7,         // Desaturación de rojos (0 = nada, 1 = total) - Aumentado para menos rojo
+            maruDelay: 0.5,              // Delay máximo (del panel)
         };
 
         const container = document.getElementById('container');
@@ -285,161 +237,9 @@
             animate();
             
             console.log('Personajes 3D listos - esperando eventos de mouse');
-            
-            // ===== PANEL DE CONTROLES =====
-            setupControlPanel();
         }
 
         // Setup del panel de controles
-        function setupControlPanel() {
-            // Referencias a controles
-            const controls = {
-                desaturation: document.getElementById('desaturation'),
-                brightness: document.getElementById('brightness'),
-                spacing: document.getElementById('spacing'),
-                sensitivity: document.getElementById('sensitivity'),
-                delay: document.getElementById('delay'),
-            };
-            
-            const values = {
-                desat: document.getElementById('val-desat'),
-                brightness: document.getElementById('val-brightness'),
-                spacing: document.getElementById('val-spacing'),
-                sensitivity: document.getElementById('val-sensitivity'),
-                delay: document.getElementById('val-delay'),
-            };
-            
-            // Update desaturation in real-time
-            controls.desaturation.addEventListener('input', (e) => {
-                const val = parseFloat(e.target.value);
-                values.desat.textContent = val.toFixed(2);
-                applyColorChanges(marcosModel, val, val, val);
-                applyColorChanges(maruModel, val, val, val);
-            });
-            
-            controls.brightness.addEventListener('input', (e) => {
-                values.brightness.textContent = e.target.value;
-                renderer.toneMappingExposure = parseFloat(e.target.value);
-            });
-            
-            controls.spacing.addEventListener('input', (e) => {
-                values.spacing.textContent = e.target.value;
-                const newSpacing = parseFloat(e.target.value);
-                if (marcosModel) marcosModel.position.x = -newSpacing / 2;
-                if (maruModel) maruModel.position.x = newSpacing / 2;
-            });
-            
-            controls.sensitivity.addEventListener('input', (e) => {
-                values.sensitivity.textContent = e.target.value;
-                CONFIG.headSensitivity = parseFloat(e.target.value);
-                CONFIG.headSensitivityY = parseFloat(e.target.value) * 0.67;
-            });
-            
-            controls.delay.addEventListener('input', (e) => {
-                values.delay.textContent = e.target.value;
-                CONFIG.maruDelay = parseFloat(e.target.value);
-            });
-            
-            // Aplicar desaturación button (same as moving slider to current position)
-            document.getElementById('apply-colors').addEventListener('click', () => {
-                const desatAmount = parseFloat(controls.desaturation.value);
-                
-                console.clear();
-                console.log(`🎨 Aplicando desaturación: ${(desatAmount * 100).toFixed(0)}%\n`);
-                
-                applyColorChanges(marcosModel, desatAmount, desatAmount, desatAmount);
-                applyColorChanges(maruModel, desatAmount, desatAmount, desatAmount);
-                
-                document.getElementById('color-info').textContent = `✓ Desaturación ${(desatAmount*100).toFixed(0)}% aplicada`;
-                setTimeout(() => {
-                    document.getElementById('color-info').textContent = '💡 La desaturación se aplica al mover el slider';
-                }, 2000);
-            });
-            
-            // Restaurar colores originales
-            document.getElementById('reset-colors').addEventListener('click', () => {
-                console.clear();
-                console.log('↺ Restaurando colores originales...\n');
-                
-                controls.desaturation.value = 0;
-                values.desat.textContent = '0.00';
-                
-                applyColorChanges(marcosModel, 0, 0, 0);
-                applyColorChanges(maruModel, 0, 0, 0);
-                
-                document.getElementById('color-info').textContent = '↺ Colores originales restaurados';
-                setTimeout(() => {
-                    document.getElementById('color-info').textContent = '💡 La desaturación se aplica al mover el slider';
-                }, 2000);
-            });
-            
-            // Toggle panel
-            const panel = document.getElementById('controls');
-            const toggleBtn = document.getElementById('toggle-panel');
-            let panelVisible = true;
-            
-            toggleBtn.addEventListener('click', () => {
-                panelVisible = !panelVisible;
-                if (panelVisible) {
-                    panel.style.right = '10px';
-                    toggleBtn.textContent = '👁️ Ocultar Panel';
-                } else {
-                    panel.style.right = '-300px';
-                    toggleBtn.textContent = '👁️ Mostrar Panel';
-                }
-            });
-            
-            // Aplicar desaturación inicial
-            setTimeout(() => {
-                const initialDesat = 0.5;
-                applyColorChanges(marcosModel, initialDesat, initialDesat, initialDesat);
-                applyColorChanges(maruModel, initialDesat, initialDesat, initialDesat);
-            }, 500);
-        }
-        
-        // Aplicar cambios de color a un modelo
-        function applyColorChanges(model, desaturation, _unused1, _unused2) {
-            if (!model) return;
-            
-            let materialsProcessed = 0;
-            
-            model.traverse((child) => {
-                if (child.isMesh) {
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    
-                    materials.forEach((material) => {
-                        if (!material) return;
-                        
-                        materialsProcessed++;
-                        
-                        // Aplicar desaturación mediante shader
-                        material.onBeforeCompile = (shader) => {
-                            shader.uniforms.desaturation = { value: desaturation };
-                            
-                            // Modificar fragment shader
-                            shader.fragmentShader = shader.fragmentShader.replace(
-                                '#include <color_fragment>',
-                                `
-                                #include <color_fragment>
-                                
-                                // Desaturación: convertir a escala de grises
-                                float gray = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
-                                diffuseColor.rgb = mix(diffuseColor.rgb, vec3(gray), desaturation);
-                                `
-                            );
-                            
-                            shader.fragmentShader = 'uniform float desaturation;\n' + shader.fragmentShader;
-                        };
-                        
-                        material.needsUpdate = true;
-                    });
-                }
-            });
-            
-            if (materialsProcessed > 0) {
-                console.log(`✅ ${materialsProcessed} materiales actualizados con desaturación ${(desaturation*100).toFixed(0)}%`);
-            }
-        }
 
         // Load individual model
         function loadModel(url, xPosition, callback) {
@@ -463,17 +263,12 @@
                     model.position.sub(center.multiplyScalar(scale));
                     model.position.x = xPosition;
 
-                    // Preparar materiales - guardar colores originales
+                    // Preparar materiales
                     model.traverse((child) => {
                         if (child.isMesh && child.material) {
                             // Reducido el emissive para menos brillo artificial
                             child.material.emissive = new THREE.Color(0x111111);
                             child.material.emissiveIntensity = 0.15;
-                            
-                            // Guardar color original para poder ajustarlo después con el panel
-                            if (child.material.color) {
-                                child.userData.originalColor = child.material.color.clone();
-                            }
                         }
                     });
 
