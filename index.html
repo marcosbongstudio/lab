@@ -24,19 +24,7 @@
             height: 100%;
         }
         
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px 40px;
-            border-radius: 12px;
-            font-weight: 600;
-            color: #333;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10;
-        }
+        /* ELIMINÉ EL CSS DE #loading */
         
         #error {
             position: absolute;
@@ -57,7 +45,6 @@
 </head>
 <body>
     <div id="container"></div>
-    <div id="loading">Cargando personajes...</div>
     <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -73,14 +60,14 @@
             headSensitivity: 1.0,        // Sensibilidad máxima (del panel)
             headSensitivityY: 0.67,      // 67% del horizontal
             smoothness: 0.05,            
-            modelScale: 3,               
-            idleEnabled: true,           
-            idleSpeed: 0.3,              
+            modelScale: 3,                
+            idleEnabled: true,            
+            idleSpeed: 0.3,               
             maruDelay: 0.5,              // Delay máximo (del panel)
         };
 
         const container = document.getElementById('container');
-        const loadingEl = document.getElementById('loading');
+        // ELIMINÉ LA REFERENCIA A loadingEl
         const errorEl = document.getElementById('error');
         
         const mouse = { x: 0, y: 0 };
@@ -279,13 +266,14 @@
                     if (progress.total > 0) {
                         const percent = Math.round((progress.loaded / progress.total) * 100);
                         console.log(`Cargando modelo en ${xPosition}: ${percent}%`);
+                        // ELIMINÉ LA ACTUALIZACIÓN DE TEXTO ACÁ
                     }
                 },
                 (error) => {
                     console.error(`Error cargando modelo en ${xPosition}:`, error);
                     errorEl.textContent = 'Error cargando uno de los personajes';
                     errorEl.style.display = 'block';
-                    loadingEl.style.display = 'none';
+                    // ELIMINÉ EL OCULTAR LOADING ACÁ
                 }
             );
         }
@@ -293,15 +281,11 @@
         function checkModelsLoaded() {
             modelsLoaded++;
             if (modelsLoaded === 2) {
-                loadingEl.textContent = '¡Listo!';
-                setTimeout(() => {
-                    loadingEl.style.display = 'none';
-                }, 1500);
+                // ELIMINÉ TODA LA LÓGICA DE OCULTAR EL MENSAJE DE CARGA
                 console.log('✓ Ambos modelos cargados');
                 console.log('👉 Usá el panel de control para ajustar colores');
-            } else {
-                loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
-            }
+            } 
+            // ELIMINÉ EL ELSE QUE MOSTRABA EL PROGRESO
         }
 
         // Animation loop
