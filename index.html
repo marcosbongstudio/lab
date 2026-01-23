@@ -65,18 +65,9 @@
         <h3 style="margin: 0 0 15px 0; font-size: 14px; border-bottom: 1px solid #666; padding-bottom: 8px;">🎛️ Controles</h3>
         
         <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Desaturar Rojos: <span id="val-red">0.7</span></label>
-            <input type="range" id="desaturate-red" min="0" max="1" step="0.05" value="0.7" style="width: 100%;">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Desaturar Naranjas: <span id="val-orange">0</span></label>
-            <input type="range" id="desaturate-orange" min="0" max="1" step="0.05" value="0" style="width: 100%;">
-        </div>
-        
-        <div style="margin-bottom: 15px;">
-            <label style="display: block; margin-bottom: 5px;">Desaturar Amarillos: <span id="val-yellow">0</span></label>
-            <input type="range" id="desaturate-yellow" min="0" max="1" step="0.05" value="0" style="width: 100%;">
+            <label style="display: block; margin-bottom: 5px;">Desaturación General: <span id="val-desat">0.5</span></label>
+            <input type="range" id="desaturation" min="0" max="1" step="0.05" value="0.5" style="width: 100%;">
+            <div style="font-size: 10px; opacity: 0.7; margin-top: 4px;">0 = color completo, 1 = escala de grises</div>
         </div>
         
         <div style="margin-bottom: 15px; border-top: 1px solid #444; padding-top: 15px;">
@@ -100,15 +91,11 @@
         </div>
         
         <button id="apply-colors" style="width: 100%; padding: 10px; background: #4CAF50; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; margin-top: 10px;">
-            🎨 Aplicar Colores
-        </button>
-        
-        <button id="test-all" style="width: 100%; padding: 10px; background: #FF9800; border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; margin-top: 8px;">
-            🧪 TEST: Desaturar TODO
+            🎨 Aplicar Desaturación
         </button>
         
         <button id="reset-colors" style="width: 100%; padding: 8px; background: #f44336; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
-            ↺ Restaurar Originales
+            ↺ Color Original (0%)
         </button>
         
         <button id="toggle-panel" style="width: 100%; padding: 8px; background: #666; border: none; border-radius: 6px; color: white; cursor: pointer; margin-top: 8px;">
@@ -116,7 +103,7 @@
         </button>
         
         <div id="color-info" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #444; font-size: 10px; opacity: 0.7;">
-            Moviendo sliders → ajusta y clickeá "Aplicar Colores"
+            💡 La desaturación se aplica al mover el slider
         </div>
     </div>
 
@@ -307,9 +294,7 @@
         function setupControlPanel() {
             // Referencias a controles
             const controls = {
-                desaturateRed: document.getElementById('desaturate-red'),
-                desaturateOrange: document.getElementById('desaturate-orange'),
-                desaturateYellow: document.getElementById('desaturate-yellow'),
+                desaturation: document.getElementById('desaturation'),
                 brightness: document.getElementById('brightness'),
                 spacing: document.getElementById('spacing'),
                 sensitivity: document.getElementById('sensitivity'),
@@ -317,74 +302,57 @@
             };
             
             const values = {
-                red: document.getElementById('val-red'),
-                orange: document.getElementById('val-orange'),
-                yellow: document.getElementById('val-yellow'),
+                desat: document.getElementById('val-desat'),
                 brightness: document.getElementById('val-brightness'),
                 spacing: document.getElementById('val-spacing'),
                 sensitivity: document.getElementById('val-sensitivity'),
                 delay: document.getElementById('val-delay'),
             };
             
-            // Update displays
-            controls.desaturateRed.addEventListener('input', (e) => {
-                values.red.textContent = e.target.value;
+            // Update desaturation in real-time
+            controls.desaturation.addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                values.desat.textContent = val.toFixed(2);
+                applyColorChanges(marcosModel, val, val, val);
+                applyColorChanges(maruModel, val, val, val);
             });
-            controls.desaturateOrange.addEventListener('input', (e) => {
-                values.orange.textContent = e.target.value;
-            });
-            controls.desaturateYellow.addEventListener('input', (e) => {
-                values.yellow.textContent = e.target.value;
-            });
+            
             controls.brightness.addEventListener('input', (e) => {
                 values.brightness.textContent = e.target.value;
                 renderer.toneMappingExposure = parseFloat(e.target.value);
             });
+            
             controls.spacing.addEventListener('input', (e) => {
                 values.spacing.textContent = e.target.value;
                 const newSpacing = parseFloat(e.target.value);
                 if (marcosModel) marcosModel.position.x = -newSpacing / 2;
                 if (maruModel) maruModel.position.x = newSpacing / 2;
             });
+            
             controls.sensitivity.addEventListener('input', (e) => {
                 values.sensitivity.textContent = e.target.value;
                 CONFIG.headSensitivity = parseFloat(e.target.value);
                 CONFIG.headSensitivityY = parseFloat(e.target.value) * 0.67;
             });
+            
             controls.delay.addEventListener('input', (e) => {
                 values.delay.textContent = e.target.value;
                 CONFIG.maruDelay = parseFloat(e.target.value);
             });
             
-            // Aplicar colores
+            // Aplicar desaturación button (same as moving slider to current position)
             document.getElementById('apply-colors').addEventListener('click', () => {
-                const redAmount = parseFloat(controls.desaturateRed.value);
-                const orangeAmount = parseFloat(controls.desaturateOrange.value);
-                const yellowAmount = parseFloat(controls.desaturateYellow.value);
+                const desatAmount = parseFloat(controls.desaturation.value);
                 
                 console.clear();
-                console.log('🎨 Aplicando colores con valores personalizados...\n');
+                console.log(`🎨 Aplicando desaturación: ${(desatAmount * 100).toFixed(0)}%\n`);
                 
-                applyColorChanges(marcosModel, redAmount, orangeAmount, yellowAmount);
-                applyColorChanges(maruModel, redAmount, orangeAmount, yellowAmount);
+                applyColorChanges(marcosModel, desatAmount, desatAmount, desatAmount);
+                applyColorChanges(maruModel, desatAmount, desatAmount, desatAmount);
                 
-                document.getElementById('color-info').textContent = '✓ Colores aplicados!';
+                document.getElementById('color-info').textContent = `✓ Desaturación ${(desatAmount*100).toFixed(0)}% aplicada`;
                 setTimeout(() => {
-                    document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
-                }, 2000);
-            });
-            
-            // TEST: Desaturar TODO
-            document.getElementById('test-all').addEventListener('click', () => {
-                console.clear();
-                console.log('🧪 MODO TEST: Desaturando TODO al 100%\n');
-                
-                applyColorChanges(marcosModel, 1.0, 1.0, 1.0);
-                applyColorChanges(maruModel, 1.0, 1.0, 1.0);
-                
-                document.getElementById('color-info').textContent = '🧪 TEST aplicado - Todo desaturado al 100%';
-                setTimeout(() => {
-                    document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
+                    document.getElementById('color-info').textContent = '💡 La desaturación se aplica al mover el slider';
                 }, 2000);
             });
             
@@ -393,12 +361,15 @@
                 console.clear();
                 console.log('↺ Restaurando colores originales...\n');
                 
+                controls.desaturation.value = 0;
+                values.desat.textContent = '0.00';
+                
                 applyColorChanges(marcosModel, 0, 0, 0);
                 applyColorChanges(maruModel, 0, 0, 0);
                 
                 document.getElementById('color-info').textContent = '↺ Colores originales restaurados';
                 setTimeout(() => {
-                    document.getElementById('color-info').textContent = 'Moviendo sliders → ajusta y clickeá "Aplicar Colores"';
+                    document.getElementById('color-info').textContent = '💡 La desaturación se aplica al mover el slider';
                 }, 2000);
             });
             
@@ -417,21 +388,18 @@
                     toggleBtn.textContent = '👁️ Mostrar Panel';
                 }
             });
+            
+            // Aplicar desaturación inicial
+            setTimeout(() => {
+                const initialDesat = 0.5;
+                applyColorChanges(marcosModel, initialDesat, initialDesat, initialDesat);
+                applyColorChanges(maruModel, initialDesat, initialDesat, initialDesat);
+            }, 500);
         }
         
         // Aplicar cambios de color a un modelo
-        function applyColorChanges(model, redAmount, orangeAmount, yellowAmount) {
-            if (!model) {
-                console.log('❌ Modelo no disponible');
-                return;
-            }
-            
-            console.log('=== APLICANDO DESATURACIÓN A TEXTURAS ===');
-            
-            // Promediamos para desaturación general
-            const desaturation = (redAmount + orangeAmount + yellowAmount) / 3;
-            
-            console.log(`Desaturación: ${(desaturation * 100).toFixed(0)}%`);
+        function applyColorChanges(model, desaturation, _unused1, _unused2) {
+            if (!model) return;
             
             let materialsProcessed = 0;
             
@@ -444,42 +412,33 @@
                         
                         materialsProcessed++;
                         
-                        // Guardar material original
-                        if (!material.userData.originalSaturation) {
-                            material.userData.originalSaturation = true;
-                        }
-                        
-                        // Aplicar desaturación mediante onBeforeCompile
-                        // Esto modifica el shader para desaturar la textura
+                        // Aplicar desaturación mediante shader
                         material.onBeforeCompile = (shader) => {
-                            // Inyectar uniform de desaturación
                             shader.uniforms.desaturation = { value: desaturation };
                             
-                            // Modificar el fragment shader para aplicar desaturación
+                            // Modificar fragment shader
                             shader.fragmentShader = shader.fragmentShader.replace(
                                 '#include <color_fragment>',
                                 `
                                 #include <color_fragment>
                                 
-                                // Aplicar desaturación
+                                // Desaturación: convertir a escala de grises
                                 float gray = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
                                 diffuseColor.rgb = mix(diffuseColor.rgb, vec3(gray), desaturation);
                                 `
                             );
                             
-                            // Agregar uniform al principio
                             shader.fragmentShader = 'uniform float desaturation;\n' + shader.fragmentShader;
                         };
                         
                         material.needsUpdate = true;
-                        
-                        console.log(`✓ Material actualizado con desaturación ${(desaturation*100).toFixed(0)}%`);
                     });
                 }
             });
             
-            console.log(`\n✅ ${materialsProcessed} materiales procesados\n`);
-            console.log('=====================================\n');
+            if (materialsProcessed > 0) {
+                console.log(`✅ ${materialsProcessed} materiales actualizados con desaturación ${(desaturation*100).toFixed(0)}%`);
+            }
         }
 
         // Load individual model
