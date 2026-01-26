@@ -15,7 +15,8 @@
             width: 100vw;
             height: 100vh;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 0;
             background: transparent;
         }
         
@@ -24,67 +25,17 @@
             height: 100%;
         }
         
-        /* CRITICAL: Forzar rendering correcto del canvas en Framer */
+        /* Prevenir pixelación en Framer */
         canvas {
             display: block;
-            width: 100% !important;
-            height: 100% !important;
-            
-            /* Forzar smooth rendering */
             image-rendering: auto !important;
-            image-rendering: -webkit-optimize-contrast !important;
-            
-            /* Prevenir pixelación */
-            -ms-interpolation-mode: bicubic !important;
-            
-            /* Hardware acceleration */
-            transform: translateZ(0) !important;
-            -webkit-transform: translateZ(0) !important;
-            
-            /* Antialiasing */
-            -webkit-font-smoothing: antialiased !important;
-            -moz-osx-font-smoothing: grayscale !important;
-            
-            /* Backface visibility para 3D */
-            backface-visibility: hidden !important;
-            -webkit-backface-visibility: hidden !important;
+            transform: translateZ(0);
         }
         
-        #loading {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px 40px;
-            border-radius: 12px;
-            font-weight: 600;
-            color: #333;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 10;
-        }
-        
-        #error {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: #fee;
-            border: 2px solid #fcc;
-            padding: 20px 40px;
-            border-radius: 12px;
-            color: #c33;
-            max-width: 400px;
-            font-weight: 600;
-            display: none;
-            z-index: 10;
-        }
     </style>
 </head>
 <body>
     <div id="container"></div>
-    <div id="loading">Cargando personajes...</div>
-    <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
@@ -106,8 +57,6 @@
         };
 
         const container = document.getElementById('container');
-        const loadingEl = document.getElementById('loading');
-        const errorEl = document.getElementById('error');
         
         const mouse = { x: 0, y: 0 };
         const targetRotation = { x: 0, y: 0 };
@@ -178,29 +127,18 @@
                 camera.position.z = 8;   // Desktop normal
             }
 
-            // Renderer con configuración anti-glitch para Framer
+            // Renderer simple y confiable
             renderer = new THREE.WebGLRenderer({ 
                 antialias: true,
                 alpha: true,
-                preserveDrawingBuffer: true,  // CRÍTICO: previene glitches en iframes
-                powerPreference: 'high-performance',
-                precision: 'highp',
-                stencil: false,
-                depth: true
+                preserveDrawingBuffer: true  // Previene glitches en Framer
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            
-            // Pixel ratio conservador (no más de 2x)
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             
-            console.log('📱 Device:', isMobile ? 'Mobile' : 'Desktop');
-            console.log('🖥️  Pixel Ratio:', window.devicePixelRatio);
-            console.log('✅ Using Pixel Ratio:', Math.min(window.devicePixelRatio, 2));
-            
-            // Tone mapping reducido para menos contraste
+            // Tone mapping
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;  // Reducido de 1.3
+            renderer.toneMappingExposure = 1.0;
             
             // Clear color transparente
             renderer.setClearColor(0x000000, 0);
@@ -365,10 +303,7 @@
                     }
                 },
                 (error) => {
-                    console.error(`Error cargando modelo en ${xPosition}:`, error);
-                    errorEl.textContent = 'Error cargando uno de los personajes';
-                    errorEl.style.display = 'block';
-                    loadingEl.style.display = 'none';
+                    console.error(`❌ Error cargando modelo en ${xPosition}:`, error);
                 }
             );
         }
@@ -376,14 +311,7 @@
         function checkModelsLoaded() {
             modelsLoaded++;
             if (modelsLoaded === 2) {
-                loadingEl.textContent = '¡Listo!';
-                setTimeout(() => {
-                    loadingEl.style.display = 'none';
-                }, 1500);
-                console.log('✓ Ambos modelos cargados');
-                console.log('👉 Usá el panel de control para ajustar colores');
-            } else {
-                loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
+                console.log('✅ Ambos modelos cargados y listos');
             }
         }
 
