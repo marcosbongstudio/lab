@@ -24,7 +24,45 @@
             height: 100%;
         }
         
-        /* ELIMINÉ EL CSS DE #loading */
+        /* CRITICAL: Forzar rendering correcto del canvas en Framer */
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            
+            /* Forzar smooth rendering */
+            image-rendering: auto !important;
+            image-rendering: -webkit-optimize-contrast !important;
+            
+            /* Prevenir pixelación */
+            -ms-interpolation-mode: bicubic !important;
+            
+            /* Hardware acceleration */
+            transform: translateZ(0) !important;
+            -webkit-transform: translateZ(0) !important;
+            
+            /* Antialiasing */
+            -webkit-font-smoothing: antialiased !important;
+            -moz-osx-font-smoothing: grayscale !important;
+            
+            /* Backface visibility para 3D */
+            backface-visibility: hidden !important;
+            -webkit-backface-visibility: hidden !important;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px 40px;
+            border-radius: 12px;
+            font-weight: 600;
+            color: #333;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10;
+        }
         
         #error {
             position: absolute;
@@ -45,6 +83,7 @@
 </head>
 <body>
     <div id="container"></div>
+    <div id="loading">Cargando personajes...</div>
     <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -60,14 +99,14 @@
             headSensitivity: 1.0,        // Sensibilidad máxima (del panel)
             headSensitivityY: 0.67,      // 67% del horizontal
             smoothness: 0.05,            
-            modelScale: 3,                
-            idleEnabled: true,            
-            idleSpeed: 0.3,               
+            modelScale: 3,               
+            idleEnabled: true,           
+            idleSpeed: 0.3,              
             maruDelay: 0.5,              // Delay máximo (del panel)
         };
 
         const container = document.getElementById('container');
-        // ELIMINÉ LA REFERENCIA A loadingEl
+        const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
         
         const mouse = { x: 0, y: 0 };
@@ -119,23 +158,52 @@
                 scene.background = new THREE.Color(CONFIG.backgroundColor);
             }
 
-            // Camera
+            // Camera con ajustes para mobile
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            const isTablet = /(iPad|tablet|playbook|silk)|(android(?!.*mobile))/i.test(navigator.userAgent);
+            
             camera = new THREE.PerspectiveCamera(
                 45,
                 window.innerWidth / window.innerHeight,
                 0.1,
                 1000
             );
-            camera.position.z = 8;
+            
+            // Alejar cámara en mobile/tablet para que se vean completos
+            if (isMobile) {
+                camera.position.z = 10;  // Más lejos en mobile
+            } else if (isTablet) {
+                camera.position.z = 9;   // Un poco más lejos en tablet
+            } else {
+                camera.position.z = 8;   // Desktop normal
+            }
 
-            // Renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            // Renderer con configuración anti-glitch para Framer
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                alpha: true,
+                preserveDrawingBuffer: true,  // CRÍTICO: previene glitches en iframes
+                powerPreference: 'high-performance',
+                precision: 'highp',
+                stencil: false,
+                depth: true
+            });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            
+            // Pixel ratio conservador (no más de 2x)
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            console.log('📱 Device:', isMobile ? 'Mobile' : 'Desktop');
+            console.log('🖥️  Pixel Ratio:', window.devicePixelRatio);
+            console.log('✅ Using Pixel Ratio:', Math.min(window.devicePixelRatio, 2));
             
             // Tone mapping reducido para menos contraste
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;  // Reducido de 1.3
+            
+            // Clear color transparente
+            renderer.setClearColor(0x000000, 0);
             
             container.appendChild(renderer.domElement);
 
@@ -250,12 +318,40 @@
                     model.position.sub(center.multiplyScalar(scale));
                     model.position.x = xPosition;
 
-                    // Preparar materiales
+                    // Preparar materiales con mejor texture filtering
                     model.traverse((child) => {
                         if (child.isMesh && child.material) {
                             // Reducido el emissive para menos brillo artificial
                             child.material.emissive = new THREE.Color(0x111111);
                             child.material.emissiveIntensity = 0.15;
+                            
+                            // Mejorar quality de texturas en mobile
+                            if (child.material.map) {
+                                child.material.map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                                child.material.map.minFilter = THREE.LinearMipmapLinearFilter;
+                                child.material.map.magFilter = THREE.LinearFilter;
+                                child.material.map.generateMipmaps = true;
+                                child.material.map.needsUpdate = true;
+                            }
+                            
+                            // Metallic/roughness texture también
+                            if (child.material.metalnessMap) {
+                                child.material.metalnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                                child.material.metalnessMap.minFilter = THREE.LinearMipmapLinearFilter;
+                                child.material.metalnessMap.magFilter = THREE.LinearFilter;
+                                child.material.metalnessMap.generateMipmaps = true;
+                                child.material.metalnessMap.needsUpdate = true;
+                            }
+                            
+                            if (child.material.roughnessMap) {
+                                child.material.roughnessMap.anisotropy = renderer.capabilities.getMaxAnisotropy();
+                                child.material.roughnessMap.minFilter = THREE.LinearMipmapLinearFilter;
+                                child.material.roughnessMap.magFilter = THREE.LinearFilter;
+                                child.material.roughnessMap.generateMipmaps = true;
+                                child.material.roughnessMap.needsUpdate = true;
+                            }
+                            
+                            child.material.needsUpdate = true;
                         }
                     });
 
@@ -266,14 +362,13 @@
                     if (progress.total > 0) {
                         const percent = Math.round((progress.loaded / progress.total) * 100);
                         console.log(`Cargando modelo en ${xPosition}: ${percent}%`);
-                        // ELIMINÉ LA ACTUALIZACIÓN DE TEXTO ACÁ
                     }
                 },
                 (error) => {
                     console.error(`Error cargando modelo en ${xPosition}:`, error);
                     errorEl.textContent = 'Error cargando uno de los personajes';
                     errorEl.style.display = 'block';
-                    // ELIMINÉ EL OCULTAR LOADING ACÁ
+                    loadingEl.style.display = 'none';
                 }
             );
         }
@@ -281,11 +376,15 @@
         function checkModelsLoaded() {
             modelsLoaded++;
             if (modelsLoaded === 2) {
-                // ELIMINÉ TODA LA LÓGICA DE OCULTAR EL MENSAJE DE CARGA
+                loadingEl.textContent = '¡Listo!';
+                setTimeout(() => {
+                    loadingEl.style.display = 'none';
+                }, 1500);
                 console.log('✓ Ambos modelos cargados');
                 console.log('👉 Usá el panel de control para ajustar colores');
-            } 
-            // ELIMINÉ EL ELSE QUE MOSTRABA EL PROGRESO
+            } else {
+                loadingEl.textContent = `Cargando ${modelsLoaded}/2 personajes...`;
+            }
         }
 
         // Animation loop
