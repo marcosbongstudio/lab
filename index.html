@@ -3,14 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong Studio - Personajes 3D</title>
+    <title>Bong 3D - Marcos y Maru</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
         
         body {
             width: 100vw;
             height: 100vh;
             overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: transparent;
         }
         
@@ -19,57 +24,77 @@
             height: 100%;
         }
         
-        canvas {
-            display: block;
+        /* ELIMINÉ EL CSS DE #loading */
+        
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fee;
+            border: 2px solid #fcc;
+            padding: 20px 40px;
+            border-radius: 12px;
+            color: #c33;
+            max-width: 400px;
+            font-weight: 600;
+            display: none;
+            z-index: 10;
         }
     </style>
 </head>
 <body>
     <div id="container"></div>
+    <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
+    
     <script>
+        // CONFIGURACIÓN
+        const CONFIG = {
+            marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
+            maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
+            backgroundColor: 'transparent',
+            spacing: 3.5,                
+            headSensitivity: 1.0,        // Sensibilidad máxima (del panel)
+            headSensitivityY: 0.67,      // 67% del horizontal
+            smoothness: 0.05,            
+            modelScale: 3,                
+            idleEnabled: true,            
+            idleSpeed: 0.3,               
+            maruDelay: 0.5,              // Delay máximo (del panel)
+        };
+
         const container = document.getElementById('container');
+        // ELIMINÉ LA REFERENCIA A loadingEl
+        const errorEl = document.getElementById('error');
+        
+        const mouse = { x: 0, y: 0 };
+        const targetRotation = { x: 0, y: 0 };
+        
+        // Rotaciones separadas para cada personaje
+        const marcosRotation = { x: 0, y: 0 };
+        const maruRotation = { x: 0, y: 0 };
+        const maruTargetRotation = { x: 0, y: 0 };
+        
+        // Sistema de animaciones idle
+        let isIdle = true;
+        let isTransitioning = false;
+        let transitionProgress = 0;
+        let idleState = 'rotate';
+        let idleTime = 0;
+        let idleStateTime = 0;
+        let lastMouseMoveTime = Date.now();
+        const IDLE_TIMEOUT = 2000;
+        const IDLE_STATE_DURATION = 5000;  // Aumentado a 5 segundos
+        const TRANSITION_SPEED = 0.02;  // Velocidad de transición suave
         
         let scene, camera, renderer;
         let marcosModel, maruModel;
         let modelsLoaded = 0;
         
-        // SOLO estas variables para scroll pause
-        let isScrolling = false;
-        let scrollTimeout;
-
-        const CONFIG = {
-            marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
-            maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
-            spacing: 3.5,
-            headSensitivity: 1.0,
-            headSensitivityY: 0.67,
-            smoothness: 0.05,
-            modelScale: 3,
-            idleEnabled: true,
-            idleSpeed: 0.3,
-            maruDelay: 0.5,
-        };
-
-        // Mouse tracking
-        const mouse = { x: 0, y: 0 };
-        const targetRotation = { x: 0, y: 0 };
-        const currentRotation = { x: 0, y: 0 };
-        const currentRotationMaru = { x: 0, y: 0 };
-        
-        // Idle animation
-        let isIdle = false;
-        let lastMouseMoveTime = Date.now();
-        let idleState = 'rotate';
-        let idleStateTime = Date.now();
-        let isTransitioning = false;
-        let transitionProgress = 0;
-        
-        const IDLE_TIMEOUT = 2000;
-        const IDLE_STATE_DURATION = 5000;
-        const TRANSITION_SPEED = 0.02;
-
+        // Función para generar movimiento orgánico (pseudo-Perlin noise)
         function organicNoise(time, seed = 0) {
             const t = time + seed;
             return (
@@ -79,76 +104,66 @@
                 Math.sin(t * 0.4) * 0.05
             );
         }
-
+        
+        // Función de easing para transiciones suaves
         function easeInOutCubic(t) {
             return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         }
 
+        // Setup escena
         function init() {
+            // Scene
             scene = new THREE.Scene();
+            
+            if (CONFIG.backgroundColor !== 'transparent') {
+                scene.background = new THREE.Color(CONFIG.backgroundColor);
+            }
 
-            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Camera
+            camera = new THREE.PerspectiveCamera(
+                45,
+                window.innerWidth / window.innerHeight,
+                0.1,
+                1000
+            );
             camera.position.z = 8;
 
+            // Renderer
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Tone mapping reducido para menos contraste
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
-            renderer.setClearColor(0x000000, 0);
+            renderer.toneMappingExposure = 1.0;  // Reducido de 1.3
             
             container.appendChild(renderer.domElement);
 
-            // Luces
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
+            // Lights - Reducidas para menos brillo
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);  // Reducido de 2.0
             scene.add(ambientLight);
 
-            const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            mainLight.position.set(5, 5, 5);
-            scene.add(mainLight);
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
+            directionalLight1.position.set(5, 5, 5);
+            scene.add(directionalLight1);
 
-            // Mouse tracking
-            const updateMousePosition = (x, y) => {
-                mouse.x = x;
-                mouse.y = y;
-                targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
-                
-                lastMouseMoveTime = Date.now();
-                if (isIdle) {
-                    isIdle = false;
-                    isTransitioning = true;
-                    transitionProgress = 0;
-                }
-            };
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);  // Reducido de 1.2
+            directionalLight2.position.set(-5, 3, -3);
+            scene.add(directionalLight2);
 
-            window.addEventListener('mousemove', (event) => {
-                const x = (event.clientX / window.innerWidth) * 2 - 1;
-                const y = (event.clientY / window.innerHeight) * 2 - 1;
-                updateMousePosition(x, y);
-            });
+            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.4);  // Reducido de 0.8
+            directionalLight3.position.set(0, -5, 0);
+            scene.add(directionalLight3);
+            
+            const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
+            frontLight.position.set(0, 0, 10);
+            scene.add(frontLight);
+            
+            const topLight = new THREE.DirectionalLight(0xffffff, 0.5);  // Reducido de 1.0
+            topLight.position.set(0, 10, 0);
+            scene.add(topLight);
 
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'mousemove') {
-                    updateMousePosition(event.data.x, event.data.y);
-                }
-            });
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            // SOLO ESTA OPTIMIZACIÓN: Pausar durante scroll
-            window.addEventListener('scroll', () => {
-                isScrolling = true;
-                clearTimeout(scrollTimeout);
-                scrollTimeout = setTimeout(() => {
-                    isScrolling = false;
-                }, 200);
-            }, { passive: true });
-
+            // Load models
             loadModel(CONFIG.marcosURL, -CONFIG.spacing / 2, (model) => {
                 marcosModel = model;
                 checkModelsLoaded();
@@ -159,9 +174,61 @@
                 checkModelsLoaded();
             });
 
+            // Mouse tracking con transiciones suaves
+            const updateMousePosition = (x, y) => {
+                mouse.x = x;
+                mouse.y = y;
+                targetRotation.y = mouse.x * CONFIG.headSensitivity;
+                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
+                
+                // Resetear idle y comenzar transición
+                lastMouseMoveTime = Date.now();
+                if (isIdle) {
+                    isIdle = false;
+                    isTransitioning = true;
+                    transitionProgress = 0;
+                }
+            };
+
+            window.addEventListener('mousemove', (event) => {
+                const x = (event.clientX / window.innerWidth) * 2 - 1;
+                const y = -(event.clientY / window.innerHeight) * 2 + 1;
+                updateMousePosition(x, y);
+            });
+
+            window.addEventListener('touchmove', (event) => {
+                if (event.touches.length > 0) {
+                    const touch = event.touches[0];
+                    const x = (touch.clientX / window.innerWidth) * 2 - 1;
+                    const y = -(touch.clientY / window.innerHeight) * 2 + 1;
+                    updateMousePosition(x, y);
+                }
+            });
+
+            // Mensajes desde parent (para wrapper)
+            window.addEventListener('message', (event) => {
+                if (event.data && event.data.type === 'mousemove') {
+                    console.log('Mensaje recibido:', event.data.x.toFixed(2), event.data.y.toFixed(2));
+                    updateMousePosition(event.data.x, event.data.y);
+                }
+            });
+
+            // Resize
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            // Start animation
             animate();
+            
+            console.log('Personajes 3D listos - esperando eventos de mouse');
         }
 
+        // Setup del panel de controles
+
+        // Load individual model
         function loadModel(url, xPosition, callback) {
             const loader = new THREE.GLTFLoader();
             
@@ -169,11 +236,24 @@
                 url,
                 (gltf) => {
                     const model = gltf.scene;
-                    model.position.set(xPosition, 0, 0);
-                    model.scale.set(CONFIG.modelScale, CONFIG.modelScale, CONFIG.modelScale);
-                    
+
+                    // Center and scale
+                    const box = new THREE.Box3().setFromObject(model);
+                    const center = box.getCenter(new THREE.Vector3());
+                    const size = box.getSize(new THREE.Vector3());
+
+                    console.log(`Modelo cargado en posición ${xPosition}. Tamaño:`, size);
+
+                    const maxDim = Math.max(size.x, size.y, size.z);
+                    const scale = CONFIG.modelScale / maxDim;
+                    model.scale.multiplyScalar(scale);
+                    model.position.sub(center.multiplyScalar(scale));
+                    model.position.x = xPosition;
+
+                    // Preparar materiales
                     model.traverse((child) => {
                         if (child.isMesh && child.material) {
+                            // Reducido el emissive para menos brillo artificial
                             child.material.emissive = new THREE.Color(0x111111);
                             child.material.emissiveIntensity = 0.15;
                         }
@@ -182,9 +262,18 @@
                     scene.add(model);
                     callback(model);
                 },
-                undefined,
+                (progress) => {
+                    if (progress.total > 0) {
+                        const percent = Math.round((progress.loaded / progress.total) * 100);
+                        console.log(`Cargando modelo en ${xPosition}: ${percent}%`);
+                        // ELIMINÉ LA ACTUALIZACIÓN DE TEXTO ACÁ
+                    }
+                },
                 (error) => {
-                    console.error('Error cargando modelo:', error);
+                    console.error(`Error cargando modelo en ${xPosition}:`, error);
+                    errorEl.textContent = 'Error cargando uno de los personajes';
+                    errorEl.style.display = 'block';
+                    // ELIMINÉ EL OCULTAR LOADING ACÁ
                 }
             );
         }
@@ -192,29 +281,30 @@
         function checkModelsLoaded() {
             modelsLoaded++;
             if (modelsLoaded === 2) {
-                console.log('✅ Modelos cargados');
-            }
+                // ELIMINÉ TODA LA LÓGICA DE OCULTAR EL MENSAJE DE CARGA
+                console.log('✓ Ambos modelos cargados');
+                console.log('👉 Usá el panel de control para ajustar colores');
+            } 
+            // ELIMINÉ EL ELSE QUE MOSTRABA EL PROGRESO
         }
 
+        // Animation loop
         function animate() {
             requestAnimationFrame(animate);
-            
-            // SKIP si está scrolleando
-            if (isScrolling) {
-                return;
-            }
 
-            const now = Date.now();
-            const timeSinceMouseMove = now - lastMouseMoveTime;
+            const currentTime = Date.now();
+            const timeSinceMouseMove = currentTime - lastMouseMoveTime;
             
-            // Idle logic
+            // Detectar si debemos entrar en modo idle
             if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle && !isTransitioning) {
                 isIdle = true;
                 isTransitioning = true;
                 transitionProgress = 0;
-                idleStateTime = now;
+                idleStateTime = currentTime;
+                console.log('Entrando en modo idle');
             }
-
+            
+            // Manejar transiciones suaves
             if (isTransitioning) {
                 transitionProgress += TRANSITION_SPEED;
                 if (transitionProgress >= 1) {
@@ -222,188 +312,121 @@
                     isTransitioning = false;
                 }
             }
-
+            
             if (isIdle) {
-                if (now - idleStateTime > IDLE_STATE_DURATION) {
+                // Cambiar de estado idle cada cierto tiempo
+                if (currentTime - idleStateTime > IDLE_STATE_DURATION) {
                     const states = ['rotate', 'look_sides', 'look_at_each_other'];
                     const currentIndex = states.indexOf(idleState);
                     idleState = states[(currentIndex + 1) % states.length];
-                    idleStateTime = now;
+                    idleStateTime = currentTime;
+                    console.log('Nuevo estado idle:', idleState);
                 }
-
-                const time = now * 0.001 * CONFIG.idleSpeed;
-                let idleRotX = 0, idleRotY = 0;
-
-                if (idleState === 'rotate') {
-                    idleRotX = organicNoise(time, 0) * 0.3;
-                    idleRotY = organicNoise(time, 100) * 0.5;
-                } else if (idleState === 'look_sides') {
-                    idleRotY = Math.sin(time * (0.5 + Math.sin(time * 0.3) * 0.3)) * 0.6;
-                    idleRotX = Math.sin(time * 0.7) * 0.15;
-                } else if (idleState === 'look_at_each_other') {
-                    idleRotY = Math.sin(time * 0.4) * 0.15;
-                    idleRotX = Math.sin(time * 0.6) * 0.1;
+                
+                idleTime += 0.016 * CONFIG.idleSpeed;
+                
+                // Calcular rotaciones idle con movimiento orgánico
+                let idleRotX = 0;
+                let idleRotY = 0;
+                
+                switch(idleState) {
+                    case 'rotate':
+                        // Rotación orgánica usando múltiples ondas
+                        idleRotY = organicNoise(idleTime, 0) * 0.25;
+                        idleRotX = organicNoise(idleTime, 100) * 0.12;
+                        break;
+                        
+                    case 'look_sides':
+                        // Mirar de lado a lado con variaciones de velocidad
+                        const lookSpeed = 1 + organicNoise(idleTime * 0.3, 50) * 0.3;
+                        idleRotY = Math.sin(idleTime * lookSpeed) * 0.35;
+                        idleRotX = organicNoise(idleTime * 0.5, 200) * 0.08;
+                        break;
+                        
+                    case 'look_at_each_other':
+                        // Se miran entre ellos con micro-movimientos
+                        const microMovement = organicNoise(idleTime * 1.5, 300) * 0.04;
+                        
+                        if (marcosModel) {
+                            const baseAngle = 0.3;
+                            marcosRotation.y += ((baseAngle + microMovement) - marcosRotation.y) * 0.03;
+                            marcosRotation.x += (organicNoise(idleTime * 0.8, 400) * 0.05 - marcosRotation.x) * 0.03;
+                            
+                            marcosModel.rotation.y = marcosRotation.y;
+                            marcosModel.rotation.x = marcosRotation.x;
+                        }
+                        
+                        if (maruModel) {
+                            const baseAngle = -0.3;
+                            maruRotation.y += ((baseAngle + microMovement) - maruRotation.y) * 0.03;
+                            maruRotation.x += (organicNoise(idleTime * 0.8, 500) * 0.05 - maruRotation.x) * 0.03;
+                            
+                            maruModel.rotation.y = maruRotation.y;
+                            maruModel.rotation.x = maruRotation.x;
+                        }
+                        
+                        renderer.render(scene, camera);
+                        return;
                 }
-
-                const factor = easeInOutCubic(transitionProgress);
-                targetRotation.x = targetRotation.x * (1 - factor) + idleRotX * factor;
-                targetRotation.y = targetRotation.y * (1 - factor) + idleRotY * factor;
+                
+                // Aplicar transición suave entre idle y mouse tracking
+                const easedProgress = easeInOutCubic(transitionProgress);
+                
+                // Para Marcos (sin delay)
+                if (isTransitioning) {
+                    marcosRotation.x += ((idleRotX * easedProgress + targetRotation.x * (1 - easedProgress)) - marcosRotation.x) * CONFIG.smoothness;
+                    marcosRotation.y += ((idleRotY * easedProgress + targetRotation.y * (1 - easedProgress)) - marcosRotation.y) * CONFIG.smoothness;
+                } else {
+                    marcosRotation.x += (idleRotX - marcosRotation.x) * CONFIG.smoothness;
+                    marcosRotation.y += (idleRotY - marcosRotation.y) * CONFIG.smoothness;
+                }
+                
+                // Para Maru (con delay)
+                const maruDelayFactor = CONFIG.maruDelay;
+                maruTargetRotation.x += (idleRotX - maruTargetRotation.x) * (1 - maruDelayFactor);
+                maruTargetRotation.y += (idleRotY - maruTargetRotation.y) * (1 - maruDelayFactor);
+                
+                if (isTransitioning) {
+                    maruRotation.x += ((maruTargetRotation.x * easedProgress + targetRotation.x * (1 - easedProgress)) - maruRotation.x) * CONFIG.smoothness;
+                    maruRotation.y += ((maruTargetRotation.y * easedProgress + targetRotation.y * (1 - easedProgress)) - maruRotation.y) * CONFIG.smoothness;
+                } else {
+                    maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
+                    maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
+                }
+                
+            } else {
+                // Modo mouse tracking
+                const easedProgress = isTransitioning ? easeInOutCubic(1 - transitionProgress) : 0;
+                
+                // Marcos responde directamente
+                marcosRotation.x += (targetRotation.x - marcosRotation.x) * CONFIG.smoothness;
+                marcosRotation.y += (targetRotation.y - marcosRotation.y) * CONFIG.smoothness;
+                
+                // Maru con delay
+                const maruDelayFactor = CONFIG.maruDelay;
+                maruTargetRotation.x += (targetRotation.x - maruTargetRotation.x) * (1 - maruDelayFactor);
+                maruTargetRotation.y += (targetRotation.y - maruTargetRotation.y) * (1 - maruDelayFactor);
+                
+                maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
+                maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
             }
 
-            // Interpolación suave
-            currentRotation.x += (targetRotation.x - currentRotation.x) * CONFIG.smoothness;
-            currentRotation.y += (targetRotation.y - currentRotation.y) * CONFIG.smoothness;
-
-            currentRotationMaru.x += (targetRotation.x - currentRotationMaru.x) * (CONFIG.smoothness * CONFIG.maruDelay);
-            currentRotationMaru.y += (targetRotation.y - currentRotationMaru.y) * (CONFIG.smoothness * CONFIG.maruDelay);
-
-            // Aplicar rotaciones
+            // Apply rotations
             if (marcosModel) {
-                marcosModel.rotation.x = currentRotation.x;
-                marcosModel.rotation.y = currentRotation.y;
+                marcosModel.rotation.x = marcosRotation.x;
+                marcosModel.rotation.y = marcosRotation.y;
             }
-
+            
             if (maruModel) {
-                maruModel.rotation.x = currentRotationMaru.x;
-                maruModel.rotation.y = currentRotationMaru.y;
+                maruModel.rotation.x = maruRotation.x;
+                maruModel.rotation.y = maruRotation.y;
             }
 
             renderer.render(scene, camera);
         }
 
-        // GLTFLoader
-        THREE.GLTFLoader = (function() {
-            function GLTFLoader(manager) {
-                this.manager = manager || THREE.DefaultLoadingManager;
-            }
-            GLTFLoader.prototype.load = function(url, onLoad, onProgress, onError) {
-                const loader = new THREE.FileLoader(this.manager);
-                loader.setResponseType('arraybuffer');
-                loader.load(url, (data) => {
-                    try {
-                        this.parse(data, '', onLoad, onError);
-                    } catch (e) {
-                        if (onError) onError(e);
-                    }
-                }, onProgress, onError);
-            };
-            GLTFLoader.prototype.parse = function(data, path, onLoad, onError) {
-                const magic = new Uint8Array(data, 0, 4);
-                const isGLB = magic[0] === 0x67 && magic[1] === 0x6C && magic[2] === 0x54 && magic[3] === 0x46;
-                
-                if (!isGLB) {
-                    if (onError) onError(new Error('Not a valid GLB file'));
-                    return;
-                }
-
-                const view = new DataView(data);
-                const jsonChunkLength = view.getUint32(12, true);
-                const jsonChunkData = new Uint8Array(data, 20, jsonChunkLength);
-                const jsonText = new TextDecoder().decode(jsonChunkData);
-                const json = JSON.parse(jsonText);
-
-                const scene = new THREE.Group();
-                if (json.scenes && json.scenes.length > 0) {
-                    const sceneIndex = json.scene !== undefined ? json.scene : 0;
-                    const sceneData = json.scenes[sceneIndex];
-                    
-                    if (sceneData.nodes) {
-                        sceneData.nodes.forEach(nodeIndex => {
-                            this.parseNode(json, nodeIndex, scene, data);
-                        });
-                    }
-                }
-
-                onLoad({ scene: scene });
-            };
-            GLTFLoader.prototype.parseNode = function(json, nodeIndex, parent, glbData) {
-                const nodeData = json.nodes[nodeIndex];
-                const node = new THREE.Group();
-
-                if (nodeData.mesh !== undefined) {
-                    const mesh = this.parseMesh(json, nodeData.mesh, glbData);
-                    if (mesh) node.add(mesh);
-                }
-
-                if (nodeData.children) {
-                    nodeData.children.forEach(childIndex => {
-                        this.parseNode(json, childIndex, node, glbData);
-                    });
-                }
-
-                parent.add(node);
-            };
-            GLTFLoader.prototype.parseMesh = function(json, meshIndex, glbData) {
-                const meshData = json.meshes[meshIndex];
-                const group = new THREE.Group();
-
-                meshData.primitives.forEach(primitive => {
-                    const geometry = new THREE.BufferGeometry();
-                    const attributes = primitive.attributes;
-
-                    Object.keys(attributes).forEach(attributeName => {
-                        const accessorIndex = attributes[attributeName];
-                        const accessor = json.accessors[accessorIndex];
-                        const bufferView = json.bufferViews[accessor.bufferView];
-                        
-                        const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
-                        const componentType = accessor.componentType;
-                        const count = accessor.count;
-                        const type = accessor.type;
-
-                        let itemSize;
-                        if (type === 'SCALAR') itemSize = 1;
-                        else if (type === 'VEC2') itemSize = 2;
-                        else if (type === 'VEC3') itemSize = 3;
-                        else if (type === 'VEC4') itemSize = 4;
-
-                        let TypedArray;
-                        if (componentType === 5126) TypedArray = Float32Array;
-                        else if (componentType === 5123) TypedArray = Uint16Array;
-                        else if (componentType === 5125) TypedArray = Uint32Array;
-
-                        const binChunkOffset = 28 + json.buffers[0].byteLength;
-                        const dataStart = binChunkOffset + byteOffset;
-                        const arrayBuffer = glbData.slice(dataStart, dataStart + count * itemSize * TypedArray.BYTES_PER_ELEMENT);
-                        const array = new TypedArray(arrayBuffer);
-
-                        const attribName = attributeName === 'POSITION' ? 'position' : 
-                                         attributeName === 'NORMAL' ? 'normal' : 
-                                         attributeName === 'TEXCOORD_0' ? 'uv' : null;
-                        
-                        if (attribName) {
-                            geometry.setAttribute(attribName, new THREE.BufferAttribute(array, itemSize));
-                        }
-                    });
-
-                    if (primitive.indices !== undefined) {
-                        const accessor = json.accessors[primitive.indices];
-                        const bufferView = json.bufferViews[accessor.bufferView];
-                        const byteOffset = (bufferView.byteOffset || 0) + (accessor.byteOffset || 0);
-                        const count = accessor.count;
-                        const componentType = accessor.componentType;
-
-                        let TypedArray = componentType === 5123 ? Uint16Array : Uint32Array;
-                        const binChunkOffset = 28 + json.buffers[0].byteLength;
-                        const dataStart = binChunkOffset + byteOffset;
-                        const arrayBuffer = glbData.slice(dataStart, dataStart + count * TypedArray.BYTES_PER_ELEMENT);
-                        const indices = new TypedArray(arrayBuffer);
-
-                        geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-                    }
-
-                    const material = new THREE.MeshStandardMaterial({ color: 0xffffff });
-                    const mesh = new THREE.Mesh(geometry, material);
-                    group.add(mesh);
-                });
-
-                return group;
-            };
-
-            return GLTFLoader;
-        })();
-
-        init();
+        // Iniciar
+        window.addEventListener('load', init);
     </script>
 </body>
 </html>
