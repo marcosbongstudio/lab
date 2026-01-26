@@ -37,7 +37,7 @@
     <div id="container">
         <iframe 
             id="iframe-3d"
-            src="./index.html"
+            src="https://marcosbongstudio.github.io/lab/index.html"
             allowtransparency="true"
         ></iframe>
     </div>
@@ -46,34 +46,91 @@
         const iframe = document.getElementById('iframe-3d');
         const container = document.getElementById('container');
         
-        // Capturar movimiento del mouse y enviarlo al iframe
-        container.addEventListener('mousemove', function(e) {
+        let iframeReady = false;
+        
+        // Esperar a que el iframe esté completamente cargado
+        iframe.addEventListener('load', function() {
+            iframeReady = true;
+            console.log('Iframe cargado y listo');
+        });
+        
+        // Capturar movimiento del mouse y enviarlo al iframe Y al parent (Framer)
+        function handleMouseMove(e) {
+            if (!iframeReady) return;
+            
             const rect = container.getBoundingClientRect();
             const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
             const y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
             
+            // Enviar al iframe de los personajes 3D
             iframe.contentWindow.postMessage({
                 type: 'mousemove',
                 x: x,
                 y: y
             }, '*');
+            
+            // NUEVO: Enviar también al parent (Framer) para cursor personalizado
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'bong-cursor-update',
+                    x: e.clientX,  // Coordenadas absolutas en pantalla
+                    y: e.clientY,
+                    clientX: e.clientX,
+                    clientY: e.clientY
+                }, '*');
+            }
+        }
+        
+        container.addEventListener('mousemove', handleMouseMove);
+        
+        // NUEVO: Notificar a Framer cuando el mouse entra/sale del área
+        container.addEventListener('mouseenter', function(e) {
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'bong-cursor-enter'
+                }, '*');
+            }
+        });
+        
+        container.addEventListener('mouseleave', function(e) {
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'bong-cursor-leave'
+                }, '*');
+            }
         });
         
         // Touch para mobile
         container.addEventListener('touchmove', function(e) {
+            if (!iframeReady) return;
+            
             if (e.touches.length > 0) {
                 const touch = e.touches[0];
                 const rect = container.getBoundingClientRect();
                 const x = ((touch.clientX - rect.left) / rect.width) * 2 - 1;
                 const y = -((touch.clientY - rect.top) / rect.height) * 2 + 1;
                 
+                // Enviar al iframe de los personajes 3D
                 iframe.contentWindow.postMessage({
                     type: 'mousemove',
                     x: x,
                     y: y
                 }, '*');
+                
+                // NUEVO: Enviar también al parent (Framer)
+                if (window.parent !== window) {
+                    window.parent.postMessage({
+                        type: 'bong-cursor-update',
+                        x: touch.clientX,
+                        y: touch.clientY,
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    }, '*');
+                }
             }
         });
+        
+        console.log('Wrapper iniciado - movete el mouse sobre el área para testing');
     </script>
 </body>
 </html>
