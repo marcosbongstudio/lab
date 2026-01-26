@@ -42,18 +42,21 @@
     
     <script>
         // CONFIGURACIÓN
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isMobileBrowser = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
         const CONFIG = {
             marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
             backgroundColor: 'transparent',
             spacing: 3.5,                
-            headSensitivity: 1.0,        // Sensibilidad máxima (del panel)
-            headSensitivityY: 0.67,      // 67% del horizontal
+            headSensitivity: 1.0,
+            headSensitivityY: 0.67,
             smoothness: 0.05,            
             modelScale: 3,               
-            idleEnabled: true,           
+            idleEnabled: !isSafari && !isMobileBrowser, // Desactivar idle en Safari/mobile
             idleSpeed: 0.3,              
-            maruDelay: 0.5,              // Delay máximo (del panel)
+            maruDelay: 0.5,
         };
 
         const container = document.getElementById('container');
@@ -86,6 +89,20 @@
         let isScrolling = false;
         let scrollTimeout;
         let isVisible = true;
+        
+        // Aggressive performance settings
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const TARGET_FPS = (isSafari || isMobile) ? 30 : 60;  // Reducir FPS en Safari/mobile
+        const frameInterval = 1000 / TARGET_FPS;
+        let lastFrameTime = 0;
+        
+        // Mouse tracking throttle
+        let lastMouseUpdate = 0;
+        const MOUSE_THROTTLE = isMobile ? 50 : 16;  // Mobile: 20fps, Desktop: 60fps
+        let lastFrameTime = 0;
+        const targetFPS = 30; // Reducir a 30fps en lugar de 60fps
+        const frameInterval = 1000 / targetFPS;
         
         // Función para generar movimiento orgánico (pseudo-Perlin noise)
         function organicNoise(time, seed = 0) {
@@ -132,14 +149,25 @@
                 camera.position.z = 8;   // Desktop normal
             }
 
-            // Renderer simple y confiable
+            // Renderer optimizado para Safari
+            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            
             renderer = new THREE.WebGLRenderer({ 
-                antialias: true,
+                antialias: !isMobile && !isSafari,  // Sin antialiasing en mobile/Safari
                 alpha: true,
-                preserveDrawingBuffer: true  // Previene glitches en Framer
+                preserveDrawingBuffer: true
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            
+            // Pixel ratio MUY reducido en Safari/mobile
+            let pixelRatio = 1;  // Default más bajo
+            if (!isSafari && !isMobile) {
+                pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+            }
+            renderer.setPixelRatio(pixelRatio);
+            
+            console.log('🦁 Safari:', isSafari, '| 📱 Mobile:', isMobile, '| 🖥️ Pixel Ratio:', pixelRatio, '| 🎯 Target FPS:', TARGET_FPS);
             
             // Tone mapping
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -150,29 +178,13 @@
             
             container.appendChild(renderer.domElement);
 
-            // Lights - Reducidas para menos brillo
-            const ambientLight = new THREE.AmbientLight(0xffffff, 1.2);  // Reducido de 2.0
+            // Lights - SIMPLIFICADAS para mejor performance
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
             scene.add(ambientLight);
 
-            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
-            directionalLight1.position.set(5, 5, 5);
-            scene.add(directionalLight1);
-
-            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.6);  // Reducido de 1.2
-            directionalLight2.position.set(-5, 3, -3);
-            scene.add(directionalLight2);
-
-            const directionalLight3 = new THREE.DirectionalLight(0xffffff, 0.4);  // Reducido de 0.8
-            directionalLight3.position.set(0, -5, 0);
-            scene.add(directionalLight3);
-            
-            const frontLight = new THREE.DirectionalLight(0xffffff, 0.8);  // Reducido de 1.5
-            frontLight.position.set(0, 0, 10);
-            scene.add(frontLight);
-            
-            const topLight = new THREE.DirectionalLight(0xffffff, 0.5);  // Reducido de 1.0
-            topLight.position.set(0, 10, 0);
-            scene.add(topLight);
+            const mainLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            mainLight.position.set(5, 5, 5);
+            scene.add(mainLight);
 
             // Load models
             loadModel(CONFIG.marcosURL, -CONFIG.spacing / 2, (model) => {
@@ -219,7 +231,14 @@
             // Mensajes desde parent (para wrapper)
             window.addEventListener('message', (event) => {
                 if (event.data && event.data.type === 'mousemove') {
-                    console.log('Mensaje recibido:', event.data.x.toFixed(2), event.data.y.toFixed(2));
+                    const now = Date.now();
+                    
+                    // Throttle mouse updates
+                    if (now - lastMouseUpdate < MOUSE_THROTTLE) {
+                        return;
+                    }
+                    lastMouseUpdate = now;
+                    
                     updateMousePosition(event.data.x, event.data.y);
                 }
             });
@@ -231,14 +250,17 @@
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
             
-            // CRITICAL: Pausar rendering durante scroll (Safari fix)
+            // CRITICAL: Pausar rendering durante scroll (Safari fix) - MÁS AGRESIVO
             window.addEventListener('scroll', () => {
                 isScrolling = true;
                 clearTimeout(scrollTimeout);
                 
+                // Pausa más larga en Safari
+                const pauseDuration = (isSafari || isMobile) ? 300 : 150;
+                
                 scrollTimeout = setTimeout(() => {
                     isScrolling = false;
-                }, 150); // Resume 150ms después de que termina el scroll
+                }, pauseDuration);
             }, { passive: true });
             
             // Pausar cuando no es visible (Intersection Observer)
@@ -339,19 +361,31 @@
             }
         }
 
-        // Animation loop
-        function animate() {
+        // Animation loop con throttling
+        function animate(timestamp) {
             requestAnimationFrame(animate);
+            
+            // SKIP rendering si está scrolleando o no es visible
+            if (isScrolling || !isVisible) {
+                return;
+            }
+            
+            // Throttle FPS
+            const elapsed = timestamp - lastFrameTime;
+            if (elapsed < frameInterval) {
+                return;
+            }
+            lastFrameTime = timestamp;
 
-            const currentTime = Date.now();
-            const timeSinceMouseMove = currentTime - lastMouseMoveTime;
+            const now = Date.now();
+            const timeSinceMouseMove = now - lastMouseMoveTime;
             
             // Detectar si debemos entrar en modo idle
             if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle && !isTransitioning) {
                 isIdle = true;
                 isTransitioning = true;
                 transitionProgress = 0;
-                idleStateTime = currentTime;
+                idleStateTime = now;
                 console.log('Entrando en modo idle');
             }
             
@@ -366,11 +400,11 @@
             
             if (isIdle) {
                 // Cambiar de estado idle cada cierto tiempo
-                if (currentTime - idleStateTime > IDLE_STATE_DURATION) {
+                if (now - idleStateTime > IDLE_STATE_DURATION) {
                     const states = ['rotate', 'look_sides', 'look_at_each_other'];
                     const currentIndex = states.indexOf(idleState);
                     idleState = states[(currentIndex + 1) % states.length];
-                    idleStateTime = currentTime;
+                    idleStateTime = now;
                     console.log('Nuevo estado idle:', idleState);
                 }
                 
