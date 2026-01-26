@@ -42,9 +42,6 @@
     
     <script>
         // CONFIGURACIÓN
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        const isMobileBrowser = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        
         const CONFIG = {
             marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
@@ -54,7 +51,7 @@
             headSensitivityY: 0.67,
             smoothness: 0.05,            
             modelScale: 3,               
-            idleEnabled: !isSafari && !isMobileBrowser, // Desactivar idle en Safari/mobile
+            idleEnabled: !isSafari && !isMobile, // Desactivar idle en Safari/mobile
             idleSpeed: 0.3,              
             maruDelay: 0.5,
         };
@@ -81,6 +78,10 @@
         const IDLE_STATE_DURATION = 5000;  // Aumentado a 5 segundos
         const TRANSITION_SPEED = 0.02;  // Velocidad de transición suave
         
+        // Browser detection (declarado UNA VEZ)
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        
         let scene, camera, renderer;
         let marcosModel, maruModel;
         let modelsLoaded = 0;
@@ -91,15 +92,13 @@
         let isVisible = true;
         
         // Aggressive performance settings
-        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-        const TARGET_FPS = (isSafari || isMobile) ? 30 : 60;  // Reducir FPS en Safari/mobile
+        const TARGET_FPS = (isSafari || isMobile) ? 30 : 60;
         const frameInterval = 1000 / TARGET_FPS;
         let lastFrameTime = 0;
         
         // Mouse tracking throttle
         let lastMouseUpdate = 0;
-        const MOUSE_THROTTLE = isMobile ? 50 : 16;  // Mobile: 20fps, Desktop: 60fps
+        const MOUSE_THROTTLE = isMobile ? 50 : 16;
         let lastFrameTime = 0;
         const targetFPS = 30; // Reducir a 30fps en lugar de 60fps
         const frameInterval = 1000 / targetFPS;
@@ -130,7 +129,6 @@
             }
 
             // Camera con ajustes para mobile
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
             const isTablet = /(iPad|tablet|playbook|silk)|(android(?!.*mobile))/i.test(navigator.userAgent);
             
             camera = new THREE.PerspectiveCamera(
@@ -150,9 +148,6 @@
             }
 
             // Renderer optimizado para Safari
-            const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            
             renderer = new THREE.WebGLRenderer({ 
                 antialias: !isMobile && !isSafari,  // Sin antialiasing en mobile/Safari
                 alpha: true,
