@@ -82,6 +82,11 @@
         let marcosModel, maruModel;
         let modelsLoaded = 0;
         
+        // Performance optimization: pausar durante scroll
+        let isScrolling = false;
+        let scrollTimeout;
+        let isVisible = true;
+        
         // Función para generar movimiento orgánico (pseudo-Perlin noise)
         function organicNoise(time, seed = 0) {
             const t = time + seed;
@@ -225,6 +230,25 @@
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
+            
+            // CRITICAL: Pausar rendering durante scroll (Safari fix)
+            window.addEventListener('scroll', () => {
+                isScrolling = true;
+                clearTimeout(scrollTimeout);
+                
+                scrollTimeout = setTimeout(() => {
+                    isScrolling = false;
+                }, 150); // Resume 150ms después de que termina el scroll
+            }, { passive: true });
+            
+            // Pausar cuando no es visible (Intersection Observer)
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    isVisible = entry.isIntersecting;
+                });
+            }, { threshold: 0.1 });
+            
+            observer.observe(container);
 
             // Start animation
             animate();
