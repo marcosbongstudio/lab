@@ -99,9 +99,6 @@
         // Mouse tracking throttle
         let lastMouseUpdate = 0;
         const MOUSE_THROTTLE = isMobile ? 50 : 16;
-        let lastFrameTime = 0;
-        const targetFPS = 30; // Reducir a 30fps en lugar de 60fps
-        const frameInterval = 1000 / targetFPS;
         
         // Función para generar movimiento orgánico (pseudo-Perlin noise)
         function organicNoise(time, seed = 0) {
