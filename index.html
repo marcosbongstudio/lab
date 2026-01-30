@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Axis Fixed</title>
+    <title>Bong 3D - Touch & Inner Look</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
+        body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; touch-action: none; }
         #container { width: 100%; height: 100%; }
     </style>
 </head>
@@ -27,7 +27,7 @@
             smoothness: 0.05,
             idleSpeed: 0.4,
             maruDelay: 0.15,
-            invY: 1 // Multiplicador para el eje Y (Si mira abajo al subir, ponelo en -1)
+            innerLookThreshold: 0.15 // El tamaño de la "zona roja" en el medio (0.0 a 1.0)
         };
 
         let scene, camera, renderer, marcosModel, maruModel;
@@ -56,7 +56,6 @@
             renderer.toneMappingExposure = CONFIG.exposure;
             
             document.getElementById('container').appendChild(renderer.domElement);
-
             scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.0));
             const dirLight = new THREE.DirectionalLight(0xffffff, CONFIG.lightIntensity);
             dirLight.position.set(5, 10, 7.5);
@@ -104,71 +103,71 @@
                 if (transitionProgress >= 1) { transitionProgress = 1; isTransitioning = false; }
             }
 
-            if (isIdle && currentTime - idleStateTime > 6000) {
-                idleState = idleState === 'rotate' ? 'look_at_each_other' : 'rotate';
-                idleStateTime = currentTime;
-            }
-
             idleTime += 0.016 * CONFIG.idleSpeed;
 
             let marcosTargetX = targetRotation.x, marcosTargetY = targetRotation.y;
             let maruTargetX = targetRotation.x, maruTargetY = targetRotation.y;
 
+            // --- LÓGICA DE MIRADA AL CENTRO (La "Zona Roja") ---
+            // Si el mouse está cerca del centro horizontal (0), forzamos que se miren
+            if (!isIdle && Math.abs(targetRotation.y) < CONFIG.innerLookThreshold) {
+                marcosTargetY = 0.45; // Marcos mira a la derecha
+                maruTargetY = -0.45;  // Maru mira a la izquierda
+            }
+
             if (isIdle) {
+                // ... (Lógica de Idle que ya teníamos)
+                if (currentTime - idleStateTime > 6000) {
+                    idleState = idleState === 'rotate' ? 'look_at_each_other' : 'rotate';
+                    idleStateTime = currentTime;
+                }
                 const marcosNoiseY = organicNoise(idleTime, 0) * 0.4;
-                const marcosNoiseX = organicNoise(idleTime, 10) * 0.2;
                 const maruNoiseY = organicNoise(idleTime, 50) * 0.4;
-                const maruNoiseX = organicNoise(idleTime, 60) * 0.2;
 
                 if (idleState === 'look_at_each_other') {
                     marcosTargetY = 0.5 + marcosNoiseY;
                     maruTargetY = -0.5 + maruNoiseY;
                 } else {
                     marcosTargetY = marcosNoiseY;
-                    marcosTargetX = marcosNoiseX;
                     maruTargetY = maruNoiseY;
-                    maruTargetX = maruNoiseX;
-                }
-
-                if (isTransitioning) {
-                    marcosTargetX = THREE.MathUtils.lerp(targetRotation.x, marcosTargetX, transitionProgress);
-                    marcosTargetY = THREE.MathUtils.lerp(targetRotation.y, marcosTargetY, transitionProgress);
-                    maruTargetX = THREE.MathUtils.lerp(targetRotation.x, maruTargetX, transitionProgress);
-                    maruTargetY = THREE.MathUtils.lerp(targetRotation.y, maruTargetY, transitionProgress);
                 }
             }
 
+            // Suavizado
             marcosRot.x += (marcosTargetX - marcosRot.x) * CONFIG.smoothness;
             marcosRot.y += (marcosTargetY - marcosRot.y) * CONFIG.smoothness;
-
             const maruSmooth = CONFIG.smoothness * (1 - CONFIG.maruDelay);
             maruRot.x += (maruTargetX - maruRot.x) * maruSmooth;
             maruRot.y += (maruTargetY - maruRot.y) * maruSmooth;
 
-            if(marcosModel) { 
-                marcosModel.rotation.x = marcosRot.x; 
-                marcosModel.rotation.y = marcosRot.y; 
-            }
-            if(maruModel) { 
-                maruModel.rotation.x = maruRot.x; 
-                maruModel.rotation.y = maruRot.y; 
-            }
+            if(marcosModel) { marcosModel.rotation.set(marcosRot.x, marcosRot.y, 0); }
+            if(maruModel) { maruModel.rotation.set(maruRot.x, maruRot.y, 0); }
 
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('mousemove', (e) => {
-            // MÉTODO DIRECTO: 
-            // Para el eje X (rotación vertical): usamos la posición Y del mouse.
-            // Restamos la mitad de la pantalla para que el centro sea 0.
-            const rawY = (e.clientY / window.innerHeight) - 0.5;
+        // --- MANEJO UNIFICADO DE INPUT (MOUSE + TOUCH) ---
+        function handleInput(clientX, clientY) {
+            const nx = (clientX / window.innerWidth) - 0.5;
+            const ny = (clientY / window.innerHeight) - 0.5;
             
-            targetRotation.y = ((e.clientX / window.innerWidth) - 0.5) * 1.6;
-            targetRotation.x = rawY * 0.8 * CONFIG.invY; // Aquí aplicamos la corrección directa
+            targetRotation.y = nx * 1.6;
+            targetRotation.x = ny * 0.8;
             
             lastMouseMoveTime = Date.now();
             if (isIdle) { isIdle = false; isTransitioning = true; transitionProgress = 0; }
-        });
+        }
+
+        window.addEventListener('mousemove', (e) => handleInput(e.clientX, e.clientY));
+        
+        window.addEventListener('touchstart', (e) => {
+            if(e.touches.length > 0) handleInput(e.touches[0].clientX, e.touches[0].clientY);
+        }, {passive: false});
+
+        window.addEventListener('touchmove', (e) => {
+            if(e.touches.length > 0) handleInput(e.touches[0].clientX, e.touches[0].clientY);
+            e.preventDefault(); // Evita el scroll mientras interactúas
+        }, {passive: false});
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
