@@ -3,42 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Optimizado</title>
+    <title>Bong 3D - High Contrast & Optimized</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
             width: 100vw; height: 100vh;
             overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
         #container { width: 100%; height: 100%; }
-        #error {
-            position: absolute; top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: #fee; border: 2px solid #fcc;
-            padding: 20px 40px; border-radius: 12px;
-            color: #c33; max-width: 400px; font-weight: 600;
-            display: none; z-index: 10;
-        }
     </style>
 </head>
 <body>
     <div id="container"></div>
-    <div id="error"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     
     <script>
-        // CONFIGURACIÓN
+        // --- CONFIGURACIÓN AJUSTADA ---
         const CONFIG = {
             marcosURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/marcos.glb',
             maruURL: 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/maria.glb',
-            backgroundColor: 'transparent',
             spacing: 3.5,                
             headSensitivity: 1.0,        
-            headSensitivityY: 0.67,      
+            headSensitivityY: 0.65,      
             smoothness: 0.05,            
             modelScale: 3,                
             idleEnabled: true,            
@@ -46,307 +36,168 @@
             maruDelay: 0.5,              
         };
 
-        const container = document.getElementById('container');
-        const errorEl = document.getElementById('error');
-        
+        let scene, camera, renderer, marcosModel, maruModel;
         const mouse = { x: 0, y: 0 };
         const targetRotation = { x: 0, y: 0 };
         const marcosRotation = { x: 0, y: 0 };
         const maruRotation = { x: 0, y: 0 };
         const maruTargetRotation = { x: 0, y: 0 };
         
-        // Sistema de animaciones idle
-        let isIdle = true;
-        let isTransitioning = false;
-        let transitionProgress = 0;
-        let idleState = 'rotate';
-        let idleTime = 0;
-        let idleStateTime = 0;
+        let isIdle = true, isTransitioning = false, transitionProgress = 0;
+        let idleState = 'rotate', idleTime = 0, idleStateTime = 0;
         let lastMouseMoveTime = Date.now();
-        const IDLE_TIMEOUT = 2000;
-        const IDLE_STATE_DURATION = 5000;
-        const TRANSITION_SPEED = 0.02;
-        
-        let scene, camera, renderer;
-        let marcosModel, maruModel;
-        let modelsLoaded = 0;
-        
-        // Organic Noise
-        function organicNoise(time, seed = 0) {
-            const t = time + seed;
-            return (
-                Math.sin(t * 0.7) * 0.5 +
-                Math.sin(t * 1.3) * 0.3 +
-                Math.sin(t * 2.1) * 0.15 +
-                Math.sin(t * 0.4) * 0.05
-            );
-        }
-        
-        function easeInOutCubic(t) {
-            return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-        }
 
         function init() {
             scene = new THREE.Scene();
-            
-            if (CONFIG.backgroundColor !== 'transparent') {
-                scene.background = new THREE.Color(CONFIG.backgroundColor);
-            }
-
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.z = 8;
 
-            // --- RENDERER OPTIMIZADO ---
+            // --- RENDERER CON "PUNCH" VISUAL ---
             renderer = new THREE.WebGLRenderer({ 
                 antialias: true, 
                 alpha: true,
-                powerPreference: "high-performance", // Pide GPU dedicada
-                precision: "mediump" // Suficiente para cartoon, ahorra recursos
+                powerPreference: "high-performance",
+                precision: "mediump" 
             });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            // Limitamos pixelRatio a 1.5 para evitar sobrecarga en pantallas 4K/Retina
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             
-            renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
+            // Ajuste de color y contraste (Mapeo de tonos dinámico)
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; 
+            renderer.toneMappingExposure = 1.4; // Aumenta la claridad general significativamente
             
-            container.appendChild(renderer.domElement);
+            document.getElementById('container').appendChild(renderer.domElement);
 
-            // --- ILUMINACIÓN OPTIMIZADA (Reemplaza las 6 luces anteriores) ---
-            
-            // 1. Luz Hemisférica: Cubre ambiente general (Cielo azulado / Suelo gris)
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.5);
-            hemiLight.position.set(0, 20, 0);
+            // --- ILUMINACIÓN POTENCIADA ---
+            // Luz de ambiente: más brillante para rellenar sombras
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
             scene.add(hemiLight);
 
-            // 2. Luz Direccional: Luz principal (Key Light)
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-            dirLight.position.set(5, 10, 7);
+            // Luz Direccional: Principal fuente de contraste
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1.8);
+            dirLight.position.set(5, 10, 7.5); // Posición para resaltar relieves
             scene.add(dirLight);
 
-            // --- FIN ILUMINACIÓN ---
-
-            // Carga de modelos
-            loadModel(CONFIG.marcosURL, -CONFIG.spacing / 2, (model) => {
-                marcosModel = model;
-                checkModelsLoaded();
-            });
-
-            loadModel(CONFIG.maruURL, CONFIG.spacing / 2, (model) => {
-                maruModel = model;
-                checkModelsLoaded();
-            });
-
-            // Event Listeners
-            const updateMousePosition = (x, y) => {
-                mouse.x = x;
-                mouse.y = y;
-                targetRotation.y = mouse.x * CONFIG.headSensitivity;
-                targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
-                
-                lastMouseMoveTime = Date.now();
-                if (isIdle) {
-                    isIdle = false;
-                    isTransitioning = true;
-                    transitionProgress = 0;
-                }
-            };
-
-            window.addEventListener('mousemove', (event) => {
-                const x = (event.clientX / window.innerWidth) * 2 - 1;
-                const y = -(event.clientY / window.innerHeight) * 2 + 1;
-                updateMousePosition(x, y);
-            });
-
-            window.addEventListener('touchmove', (event) => {
-                if (event.touches.length > 0) {
-                    const touch = event.touches[0];
-                    const x = (touch.clientX / window.innerWidth) * 2 - 1;
-                    const y = -(touch.clientY / window.innerHeight) * 2 + 1;
-                    updateMousePosition(x, y);
-                }
-            });
-
-            window.addEventListener('message', (event) => {
-                if (event.data && event.data.type === 'mousemove') {
-                    updateMousePosition(event.data.x, event.data.y);
-                }
-            });
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
+            loadModels();
             animate();
-            console.log('🚀 Sistema optimizado iniciado');
         }
 
-        function loadModel(url, xPosition, callback) {
+        function loadModels() {
             const loader = new THREE.GLTFLoader();
-            
-            loader.load(url, (gltf) => {
+
+            const setupModel = (gltf, xPos) => {
                 const model = gltf.scene;
-
                 const box = new THREE.Box3().setFromObject(model);
-                const center = box.getCenter(new THREE.Vector3());
                 const size = box.getSize(new THREE.Vector3());
-
-                const maxDim = Math.max(size.x, size.y, size.z);
-                const scale = CONFIG.modelScale / maxDim;
+                const scale = CONFIG.modelScale / Math.max(size.x, size.y, size.z);
+                
                 model.scale.multiplyScalar(scale);
-                model.position.sub(center.multiplyScalar(scale));
-                model.position.x = xPosition;
+                const center = box.getCenter(new THREE.Vector3()).multiplyScalar(scale);
+                model.position.sub(center);
+                model.position.x = xPos;
 
                 model.traverse((child) => {
                     if (child.isMesh && child.material) {
-                        child.material.emissive = new THREE.Color(0x111111);
-                        child.material.emissiveIntensity = 0.15;
-                        // Optimizacion extra: Evita recalcular normales si no es necesario
-                        child.matrixAutoUpdate = true; 
+                        // EMISIVIDAD: Hace que los colores sean más vibrantes y no se "mueran" en la sombra
+                        child.material.emissive = new THREE.Color(0x222222);
+                        child.material.emissiveIntensity = 0.45;
                     }
                 });
-
                 scene.add(model);
-                callback(model);
-            }, undefined, (error) => {
-                console.error(`Error loading model:`, error);
-                errorEl.textContent = 'Error cargando personaje';
-                errorEl.style.display = 'block';
-            });
+                return model;
+            };
+
+            loader.load(CONFIG.marcosURL, (gltf) => { marcosModel = setupModel(gltf, -CONFIG.spacing / 2); });
+            loader.load(CONFIG.maruURL, (gltf) => { maruModel = setupModel(gltf, CONFIG.spacing / 2); });
         }
 
-        function checkModelsLoaded() {
-            modelsLoaded++;
-            if (modelsLoaded === 2) {
-                console.log('✓ Modelos listos');
-            } 
+        function organicNoise(time, seed = 0) {
+            const t = time + seed;
+            return Math.sin(t * 0.7) * 0.5 + Math.sin(t * 1.3) * 0.3 + Math.sin(t * 2.1) * 0.15;
         }
 
         function animate() {
             requestAnimationFrame(animate);
-
-            // --- OPTIMIZACIÓN BATTERY SAVER ---
-            // Si la pestaña no está visible, no calculamos ni renderizamos
             if (document.hidden) return;
 
             const currentTime = Date.now();
-            const timeSinceMouseMove = currentTime - lastMouseMoveTime;
-            
-            // Lógica IDLE
-            if (CONFIG.idleEnabled && timeSinceMouseMove > IDLE_TIMEOUT && !isIdle && !isTransitioning) {
-                isIdle = true;
-                isTransitioning = true;
-                transitionProgress = 0;
+            if (currentTime - lastMouseMoveTime > 2000 && !isIdle && !isTransitioning) {
+                isIdle = true; isTransitioning = true; transitionProgress = 0;
                 idleStateTime = currentTime;
             }
-            
-            // Transiciones
+
             if (isTransitioning) {
-                transitionProgress += TRANSITION_SPEED;
-                if (transitionProgress >= 1) {
-                    transitionProgress = 1;
-                    isTransitioning = false;
-                }
-            }
-            
-            if (isIdle) {
-                if (currentTime - idleStateTime > IDLE_STATE_DURATION) {
-                    const states = ['rotate', 'look_sides', 'look_at_each_other'];
-                    const currentIndex = states.indexOf(idleState);
-                    idleState = states[(currentIndex + 1) % states.length];
-                    idleStateTime = currentTime;
-                }
-                
-                idleTime += 0.016 * CONFIG.idleSpeed;
-                
-                let idleRotX = 0;
-                let idleRotY = 0;
-                
-                switch(idleState) {
-                    case 'rotate':
-                        idleRotY = organicNoise(idleTime, 0) * 0.25;
-                        idleRotX = organicNoise(idleTime, 100) * 0.12;
-                        break;
-                    case 'look_sides':
-                        const lookSpeed = 1 + organicNoise(idleTime * 0.3, 50) * 0.3;
-                        idleRotY = Math.sin(idleTime * lookSpeed) * 0.35;
-                        idleRotX = organicNoise(idleTime * 0.5, 200) * 0.08;
-                        break;
-                    case 'look_at_each_other':
-                        const microMovement = organicNoise(idleTime * 1.5, 300) * 0.04;
-                        if (marcosModel) {
-                            const baseAngle = 0.3;
-                            marcosRotation.y += ((baseAngle + microMovement) - marcosRotation.y) * 0.03;
-                            marcosRotation.x += (organicNoise(idleTime * 0.8, 400) * 0.05 - marcosRotation.x) * 0.03;
-                            marcosModel.rotation.y = marcosRotation.y;
-                            marcosModel.rotation.x = marcosRotation.x;
-                        }
-                        if (maruModel) {
-                            const baseAngle = -0.3;
-                            maruRotation.y += ((baseAngle + microMovement) - maruRotation.y) * 0.03;
-                            maruRotation.x += (organicNoise(idleTime * 0.8, 500) * 0.05 - maruRotation.x) * 0.03;
-                            maruModel.rotation.y = maruRotation.y;
-                            maruModel.rotation.x = maruRotation.x;
-                        }
-                        renderer.render(scene, camera);
-                        return;
-                }
-                
-                const easedProgress = easeInOutCubic(transitionProgress);
-                
-                // Marcos (directo)
-                if (isTransitioning) {
-                    marcosRotation.x += ((idleRotX * easedProgress + targetRotation.x * (1 - easedProgress)) - marcosRotation.x) * CONFIG.smoothness;
-                    marcosRotation.y += ((idleRotY * easedProgress + targetRotation.y * (1 - easedProgress)) - marcosRotation.y) * CONFIG.smoothness;
-                } else {
-                    marcosRotation.x += (idleRotX - marcosRotation.x) * CONFIG.smoothness;
-                    marcosRotation.y += (idleRotY - marcosRotation.y) * CONFIG.smoothness;
-                }
-                
-                // Maru (delay)
-                const maruDelayFactor = CONFIG.maruDelay;
-                maruTargetRotation.x += (idleRotX - maruTargetRotation.x) * (1 - maruDelayFactor);
-                maruTargetRotation.y += (idleRotY - maruTargetRotation.y) * (1 - maruDelayFactor);
-                
-                if (isTransitioning) {
-                    maruRotation.x += ((maruTargetRotation.x * easedProgress + targetRotation.x * (1 - easedProgress)) - maruRotation.x) * CONFIG.smoothness;
-                    maruRotation.y += ((maruTargetRotation.y * easedProgress + targetRotation.y * (1 - easedProgress)) - maruRotation.y) * CONFIG.smoothness;
-                } else {
-                    maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
-                    maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
-                }
-                
-            } else {
-                // Tracking mode
-                const easedProgress = isTransitioning ? easeInOutCubic(1 - transitionProgress) : 0;
-                
-                marcosRotation.x += (targetRotation.x - marcosRotation.x) * CONFIG.smoothness;
-                marcosRotation.y += (targetRotation.y - marcosRotation.y) * CONFIG.smoothness;
-                
-                const maruDelayFactor = CONFIG.maruDelay;
-                maruTargetRotation.x += (targetRotation.x - maruTargetRotation.x) * (1 - maruDelayFactor);
-                maruTargetRotation.y += (targetRotation.y - maruTargetRotation.y) * (1 - maruDelayFactor);
-                
-                maruRotation.x += (maruTargetRotation.x - maruRotation.x) * CONFIG.smoothness;
-                maruRotation.y += (maruTargetRotation.y - maruRotation.y) * CONFIG.smoothness;
+                transitionProgress += 0.02;
+                if (transitionProgress >= 1) { transitionProgress = 1; isTransitioning = false; }
             }
 
-            if (marcosModel) {
-                marcosModel.rotation.x = marcosRotation.x;
-                marcosModel.rotation.y = marcosRotation.y;
+            if (isIdle) {
+                // Lógica de cambios de estado Idle...
+                if (currentTime - idleStateTime > 5000) {
+                    const states = ['rotate', 'look_sides', 'look_at_each_other'];
+                    idleState = states[(states.indexOf(idleState) + 1) % states.length];
+                    idleStateTime = currentTime;
+                }
+                idleTime += 0.016 * CONFIG.idleSpeed;
+                
+                let iX = 0, iY = 0;
+                if (idleState === 'rotate') { 
+                    iY = organicNoise(idleTime, 0) * 0.25; 
+                    iX = organicNoise(idleTime, 100) * 0.12; 
+                } else if (idleState === 'look_sides') {
+                    iY = Math.sin(idleTime) * 0.35;
+                }
+                
+                const t = (n, target) => n + (target - n) * CONFIG.smoothness;
+                marcosRotation.x = t(marcosRotation.x, iX);
+                marcosRotation.y = t(marcosRotation.y, iY);
+                
+                maruTargetRotation.x = t(maruTargetRotation.x, iX);
+                maruTargetRotation.y = t(maruTargetRotation.y, iY);
+                maruRotation.x = t(maruRotation.x, maruTargetRotation.x);
+                maruRotation.y = t(maruRotation.y, maruTargetRotation.y);
+
+            } else {
+                // Modo Tracking Mouse
+                const t = (n, target) => n + (target - n) * CONFIG.smoothness;
+                marcosRotation.x = t(marcosRotation.x, targetRotation.x);
+                marcosRotation.y = t(marcosRotation.y, targetRotation.y);
+                
+                maruTargetRotation.x = t(maruTargetRotation.x, targetRotation.x);
+                maruTargetRotation.y = t(maruTargetRotation.y, targetRotation.y);
+                maruRotation.x = t(maruRotation.x, maruTargetRotation.x);
+                maruRotation.y = t(maruRotation.y, maruTargetRotation.y);
             }
-            
-            if (maruModel) {
-                maruModel.rotation.x = maruRotation.x;
-                maruModel.rotation.y = maruRotation.y;
+
+            if (marcosModel) { 
+                marcosModel.rotation.x = marcosRotation.x; 
+                marcosModel.rotation.y = marcosRotation.y; 
+            }
+            if (maruModel) { 
+                maruModel.rotation.x = maruRotation.x; 
+                maruModel.rotation.y = maruRotation.y; 
             }
 
             renderer.render(scene, camera);
         }
 
-        window.addEventListener('load', init);
+        // Mouse Events
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+            targetRotation.y = mouse.x * CONFIG.headSensitivity;
+            targetRotation.x = -mouse.y * CONFIG.headSensitivityY;
+            lastMouseMoveTime = Date.now();
+            isIdle = false;
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
     </script>
 </body>
 </html>
