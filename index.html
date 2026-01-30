@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Final Optimized</title>
+    <title>Bong 3D - Final Optimized & Animated</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
@@ -17,20 +17,33 @@
     <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/GLTFLoader.js"></script>
     
     <script>
-        // --- VALORES CONGELADOS (Tus preferidos) ---
-        const FINAL_CONFIG = {
+        // --- CONFIGURACIÓN CONGELADA ---
+        const CONFIG = {
             exposure: 2.2,
             lightIntensity: 1.0,
             emissiveIntensity: 0.1,
             roughness: 1.0,
             spacing: 3.5,
             modelScale: 3,
-            smoothness: 0.05
+            smoothness: 0.05,
+            idleSpeed: 0.3,
+            maruDelay: 0.5
         };
 
         let scene, camera, renderer, marcosModel, maruModel;
         const targetRotation = { x: 0, y: 0 };
-        const marcosRot = { x: 0, y: 0 }, maruRot = { x: 0, y: 0 };
+        const marcosRotation = { x: 0, y: 0 }, maruRotation = { x: 0, y: 0 };
+        const maruTargetRotation = { x: 0, y: 0 };
+        
+        // Sistema Idle
+        let isIdle = true, isTransitioning = false, transitionProgress = 0;
+        let idleState = 'rotate', idleTime = 0, idleStateTime = Date.now();
+        let lastMouseMoveTime = Date.now();
+
+        function organicNoise(time, seed = 0) {
+            const t = time + seed;
+            return Math.sin(t * 0.7) * 0.5 + Math.sin(t * 1.3) * 0.3 + Math.sin(t * 2.1) * 0.15;
+        }
 
         function init() {
             scene = new THREE.Scene();
@@ -40,17 +53,14 @@
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance", precision: "mediump" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
-            
-            // Post-procesado aplicado
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = FINAL_CONFIG.exposure;
+            renderer.toneMappingExposure = CONFIG.exposure;
             
             document.getElementById('container').appendChild(renderer.domElement);
 
-            // Luz única ultra-optimizada
             const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
             scene.add(hemi);
-            const dirLight = new THREE.DirectionalLight(0xffffff, FINAL_CONFIG.lightIntensity);
+            const dirLight = new THREE.DirectionalLight(0xffffff, CONFIG.lightIntensity);
             dirLight.position.set(5, 10, 7.5);
             scene.add(dirLight);
 
@@ -66,51 +76,106 @@
                 const m = gltf.scene;
                 const box = new THREE.Box3().setFromObject(m);
                 const size = box.getSize(new THREE.Vector3());
-                const scale = FINAL_CONFIG.modelScale / Math.max(size.x, size.y, size.z);
+                const scale = CONFIG.modelScale / Math.max(size.x, size.y, size.z);
                 m.scale.set(scale, scale, scale);
                 m.position.x = x;
-                m.position.y = -0.5; // Ajuste leve de altura
+                m.position.y = -0.5;
 
                 m.traverse(c => {
                     if(c.isMesh) {
                         c.material.emissive = new THREE.Color(0x222222);
-                        c.material.emissiveIntensity = FINAL_CONFIG.emissiveIntensity;
-                        c.material.roughness = FINAL_CONFIG.roughness;
+                        c.material.emissiveIntensity = CONFIG.emissiveIntensity;
+                        c.material.roughness = CONFIG.roughness;
                     }
                 });
                 scene.add(m);
                 return m;
             };
 
-            loader.load(url + 'marcos.glb', (g) => { marcosModel = setup(g, -FINAL_CONFIG.spacing/2); });
-            loader.load(url + 'maria.glb', (g) => { maruModel = setup(g, FINAL_CONFIG.spacing/2); });
+            loader.load(url + 'marcos.glb', (g) => { marcosModel = setup(g, -CONFIG.spacing/2); });
+            loader.load(url + 'maria.glb', (g) => { maruModel = setup(g, CONFIG.spacing/2); });
         }
 
         function animate() {
             requestAnimationFrame(animate);
             if (document.hidden) return;
 
-            // Suavizado de rotación
-            marcosRot.x += (targetRotation.x - marcosRot.x) * FINAL_CONFIG.smoothness;
-            marcosRot.y += (targetRotation.y - marcosRot.y) * FINAL_CONFIG.smoothness;
-            maruRot.x += (targetRotation.x - maruRot.x) * (FINAL_CONFIG.smoothness * 0.8);
-            maruRot.y += (targetRotation.y - maruRot.y) * (FINAL_CONFIG.smoothness * 0.8);
+            const currentTime = Date.now();
+            
+            // Detectar si debe entrar en IDLE (2 segundos de inactividad)
+            if (currentTime - lastMouseMoveTime > 2000 && !isIdle) {
+                isIdle = true;
+                isTransitioning = true;
+                transitionProgress = 0;
+                idleStateTime = currentTime;
+            }
+
+            if (isTransitioning) {
+                transitionProgress += 0.02;
+                if (transitionProgress >= 1) { transitionProgress = 1; isTransitioning = false; }
+            }
+
+            let finalTargetX = targetRotation.x;
+            let finalTargetY = targetRotation.y;
+
+            if (isIdle) {
+                // Cambio aleatorio de estados de animación cada 5 segundos
+                if (currentTime - idleStateTime > 5000) {
+                    const states = ['rotate', 'look_sides'];
+                    idleState = states[(states.indexOf(idleState) + 1) % states.length];
+                    idleStateTime = currentTime;
+                }
+
+                idleTime += 0.016 * CONFIG.idleSpeed;
+                
+                let iX = 0, iY = 0;
+                if (idleState === 'rotate') { 
+                    iY = organicNoise(idleTime, 0) * 0.25; 
+                    iX = organicNoise(idleTime, 100) * 0.12; 
+                } else {
+                    iY = Math.sin(idleTime) * 0.35;
+                }
+
+                // Si estamos transicionando, mezclamos la posición del mouse con la de idle
+                if (isTransitioning) {
+                    finalTargetX = THREE.MathUtils.lerp(targetRotation.x, iX, transitionProgress);
+                    finalTargetY = THREE.MathUtils.lerp(targetRotation.y, iY, transitionProgress);
+                } else {
+                    finalTargetX = iX;
+                    finalTargetY = iY;
+                }
+            }
+
+            // Aplicar suavizado (Lerp)
+            const t = CONFIG.smoothness;
+            marcosRotation.x += (finalTargetX - marcosRotation.x) * t;
+            marcosRotation.y += (finalTargetY - marcosRotation.y) * t;
+
+            // Maru tiene el delay que configuraste
+            maruTargetRotation.x += (finalTargetX - maruTargetRotation.x) * (1 - CONFIG.maruDelay);
+            maruTargetRotation.y += (finalTargetY - maruTargetRotation.y) * (1 - CONFIG.maruDelay);
+            maruRotation.x += (maruTargetRotation.x - maruRotation.x) * t;
+            maruRotation.y += (maruTargetRotation.y - maruRotation.y) * t;
 
             if(marcosModel) { 
-                marcosModel.rotation.x = marcosRot.x; 
-                marcosModel.rotation.y = marcosRot.y; 
+                marcosModel.rotation.x = marcosRotation.x; 
+                marcosModel.rotation.y = marcosRotation.y; 
             }
             if(maruModel) { 
-                maruModel.rotation.x = maruRot.x; 
-                maruModel.rotation.y = maruRot.y; 
+                maruModel.rotation.x = maruRotation.x; 
+                maruModel.rotation.y = maruRotation.y; 
             }
 
             renderer.render(scene, camera);
         }
 
         window.addEventListener('mousemove', (e) => {
-            targetRotation.y = ((e.clientX / window.innerWidth) * 2 - 1) * 0.8;
-            targetRotation.x = (-(e.clientY / window.innerHeight) * 2 + 1) * 0.4;
+            const x = (e.clientX / window.innerWidth) * 2 - 1;
+            const y = -(e.clientY / window.innerHeight) * 2 + 1;
+            targetRotation.y = x * 0.8;
+            targetRotation.x = -y * 0.4;
+            lastMouseMoveTime = Date.now();
+            if (isIdle) { isIdle = false; isTransitioning = true; transitionProgress = 0; }
         });
 
         window.addEventListener('resize', () => {
