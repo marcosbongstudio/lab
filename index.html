@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Final Fixed</title>
+    <title>Bong 3D - Axis Fixed</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
@@ -26,7 +26,8 @@
             modelScale: 3,
             smoothness: 0.05,
             idleSpeed: 0.4,
-            maruDelay: 0.15 
+            maruDelay: 0.15,
+            invY: 1 // Multiplicador para el eje Y (Si mira abajo al subir, ponelo en -1)
         };
 
         let scene, camera, renderer, marcosModel, maruModel;
@@ -157,12 +158,13 @@
         }
 
         window.addEventListener('mousemove', (e) => {
-            // Normalizamos coordenadas
-            const nx = (e.clientX / window.innerWidth) * 2 - 1;
-            const ny = -(e.clientY / window.innerHeight) * 2 + 1;
+            // MÉTODO DIRECTO: 
+            // Para el eje X (rotación vertical): usamos la posición Y del mouse.
+            // Restamos la mitad de la pantalla para que el centro sea 0.
+            const rawY = (e.clientY / window.innerHeight) - 0.5;
             
-            targetRotation.y = nx * 0.8;
-            targetRotation.x = ny * 0.4; // AJUSTE AQUÍ: Eliminado el "-" para corregir el eje Y
+            targetRotation.y = ((e.clientX / window.innerWidth) - 0.5) * 1.6;
+            targetRotation.x = rawY * 0.8 * CONFIG.invY; // Aquí aplicamos la corrección directa
             
             lastMouseMoveTime = Date.now();
             if (isIdle) { isIdle = false; isTransitioning = true; transitionProgress = 0; }
