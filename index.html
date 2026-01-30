@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bong 3D - Hover Shake & Touch</title>
+    <title>Bong 3D - Hover Shake Fixed</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { width: 100vw; height: 100vh; overflow: hidden; background: transparent; touch-action: none; }
@@ -28,8 +28,7 @@
             idleSpeed: 0.4,
             maruDelay: 0.15,
             innerLookThreshold: 0.15,
-            shakeIntensity: 0.03, // Intensidad del temblor
-            hoverRadius: 1.2      // Radio de detección para el hover
+            shakeIntensity: 0.04 // Lo subí un pelín para que se note bien
         };
 
         let scene, camera, renderer, marcosModel, maruModel;
@@ -41,9 +40,8 @@
         let idleTime = 0, idleStateTime = Date.now();
         let lastMouseMoveTime = Date.now();
         
-        // Raycaster para detectar el Hover
         const raycaster = new THREE.Raycaster();
-        const mouseVec = new THREE.Vector2();
+        const mouseVec = new THREE.Vector2(-10, -10); 
         let hoveredModel = null;
 
         function organicNoise(time, seed = 0) {
@@ -56,7 +54,7 @@
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.z = 8;
 
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance", precision: "mediump" });
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -75,9 +73,9 @@
         function loadModels() {
             const loader = new THREE.GLTFLoader();
             const url = 'https://raw.githubusercontent.com/marcosbongstudio/lab/refs/heads/main/';
-            const setup = (gltf, x, name) => {
+            
+            const setup = (gltf, x) => {
                 const m = gltf.scene;
-                m.name = name;
                 const box = new THREE.Box3().setFromObject(m);
                 const size = box.getSize(new THREE.Vector3());
                 const scale = CONFIG.modelScale / Math.max(size.x, size.y, size.z);
@@ -93,33 +91,43 @@
                 scene.add(m);
                 return m;
             };
-            loader.load(url + 'marcos.glb', (g) => { marcosModel = setup(g, -CONFIG.spacing/2, 'marcos'); });
-            loader.load(url + 'maria.glb', (g) => { maruModel = setup(g, CONFIG.spacing/2, 'maru'); });
+
+            loader.load(url + 'marcos.glb', (g) => { marcosModel = setup(g, -CONFIG.spacing/2); });
+            loader.load(url + 'maria.glb', (g) => { maruModel = setup(g, CONFIG.spacing/2); });
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            if (document.hidden) return;
             const currentTime = Date.now();
             const timeSeconds = currentTime * 0.001;
 
+            // --- DETECCIÓN CONSTANTE DE HOVER ---
+            hoveredModel = null;
+            raycaster.setFromCamera(mouseVec, camera);
+            
+            if (marcosModel && maruModel) {
+                const intersectsMarcos = raycaster.intersectObject(marcosModel, true);
+                const intersectsMaru = raycaster.intersectObject(maruModel, true);
+                
+                if (intersectsMarcos.length > 0) hoveredModel = 'marcos';
+                else if (intersectsMaru.length > 0) hoveredModel = 'maru';
+            }
+
+            // Lógica de Idle / Transición
             if (currentTime - lastMouseMoveTime > 2500 && !isIdle) {
                 isIdle = true; isTransitioning = true; transitionProgress = 0; idleStateTime = currentTime;
             }
-
             if (isTransitioning) {
                 transitionProgress += 0.015;
                 if (transitionProgress >= 1) { transitionProgress = 1; isTransitioning = false; }
             }
 
             idleTime += 0.016 * CONFIG.idleSpeed;
+            let mTX = targetRotation.x, mTY = targetRotation.y;
+            let muTX = targetRotation.x, muTY = targetRotation.y;
 
-            let marcosTargetX = targetRotation.x, marcosTargetY = targetRotation.y;
-            let maruTargetX = targetRotation.x, maruTargetY = targetRotation.y;
-
-            // Lógica de mirada al centro
             if (!isIdle && Math.abs(targetRotation.y) < CONFIG.innerLookThreshold) {
-                marcosTargetY = 0.45; maruTargetY = -0.45;
+                mTY = 0.45; muTY = -0.45;
             }
 
             if (isIdle) {
@@ -127,68 +135,45 @@
                     idleState = idleState === 'rotate' ? 'look_at_each_other' : 'rotate';
                     idleStateTime = currentTime;
                 }
-                const mNoiseY = organicNoise(idleTime, 0) * 0.4;
-                const muNoiseY = organicNoise(idleTime, 50) * 0.4;
+                const nM = organicNoise(idleTime, 0) * 0.4;
+                const nMu = organicNoise(idleTime, 50) * 0.4;
                 if (idleState === 'look_at_each_other') {
-                    marcosTargetY = 0.5 + mNoiseY; maruTargetY = -0.5 + muNoiseY;
+                    mTY = 0.5 + nM; muTY = -0.5 + nMu;
                 } else {
-                    marcosTargetY = mNoiseY; maruTargetY = muNoiseY;
+                    mTY = nM; muTY = nMu;
                 }
             }
 
-            // Suavizado de rotación
-            marcosRot.x += (marcosTargetX - marcosRot.x) * CONFIG.smoothness;
-            marcosRot.y += (marcosTargetY - marcosRot.y) * CONFIG.smoothness;
+            // Suavizado
+            marcosRot.x += (mTX - marcosRot.x) * CONFIG.smoothness;
+            marcosRot.y += (mTY - marcosRot.y) * CONFIG.smoothness;
             const maruSmooth = CONFIG.smoothness * (1 - CONFIG.maruDelay);
-            maruRot.x += (maruTargetX - maruRot.x) * maruSmooth;
-            maruRot.y += (maruTargetY - maruRot.y) * maruSmooth;
+            maruRot.x += (muTX - maruRot.x) * maruSmooth;
+            maruRot.y += (muTY - maruRot.y) * maruSmooth;
 
-            if(marcosModel) { 
-                // --- EFECTO SHAKE MARCOS ---
-                let shakeX = 0, shakeY = 0;
-                if (hoveredModel === 'marcos') {
-                    shakeX = Math.sin(timeSeconds * 40) * CONFIG.shakeIntensity;
-                    shakeY = Math.cos(timeSeconds * 35) * CONFIG.shakeIntensity;
-                }
-                marcosModel.rotation.set(marcosRot.x + shakeX, marcosRot.y + shakeY, 0); 
+            // Aplicar rotación + Shake
+            if(marcosModel) {
+                let sX = (hoveredModel === 'marcos') ? Math.sin(timeSeconds * 50) * CONFIG.shakeIntensity : 0;
+                let sY = (hoveredModel === 'marcos') ? Math.cos(timeSeconds * 45) * CONFIG.shakeIntensity : 0;
+                marcosModel.rotation.set(marcosRot.x + sX, marcosRot.y + sY, 0);
             }
-            
-            if(maruModel) { 
-                // --- EFECTO SHAKE MARU ---
-                let shakeX = 0, shakeY = 0;
-                if (hoveredModel === 'maru') {
-                    shakeX = Math.sin(timeSeconds * 40) * CONFIG.shakeIntensity;
-                    shakeY = Math.cos(timeSeconds * 35) * CONFIG.shakeIntensity;
-                }
-                maruModel.rotation.set(maruRot.x + shakeX, maruRot.y + shakeY, 0); 
+            if(maruModel) {
+                let sX = (hoveredModel === 'maru') ? Math.sin(timeSeconds * 50) * CONFIG.shakeIntensity : 0;
+                let sY = (hoveredModel === 'maru') ? Math.cos(timeSeconds * 45) * CONFIG.shakeIntensity : 0;
+                maruModel.rotation.set(maruRot.x + sX, maruRot.y + sY, 0);
             }
 
             renderer.render(scene, camera);
         }
 
         function handleInput(clientX, clientY) {
+            // Actualizamos coordenadas para el raycaster
             mouseVec.x = (clientX / window.innerWidth) * 2 - 1;
             mouseVec.y = -(clientY / window.innerHeight) * 2 + 1;
 
-            // Detección de Hover
-            raycaster.setFromCamera(mouseVec, camera);
-            const intersects = raycaster.intersectObjects(scene.children, true);
-            
-            if (intersects.length > 0) {
-                const obj = intersects[0].object;
-                // Buscamos el padre que tenga el nombre que pusimos en setup
-                let p = obj;
-                while(p.parent && !p.name) p = p.parent;
-                hoveredModel = p.name;
-            } else {
-                hoveredModel = null;
-            }
-
-            // Rotación normal
-            const nx = (clientX / window.innerWidth) - 0.5;
-            const ny = (clientY / window.innerHeight) - 0.5;
-            targetRotation.y = nx * 1.6;
-            targetRotation.x = ny * 0.8;
+            // Rotación
+            targetRotation.y = (clientX / window.innerWidth - 0.5) * 1.6;
+            targetRotation.x = (clientY / window.innerHeight - 0.5) * 0.8;
             
             lastMouseMoveTime = Date.now();
             if (isIdle) { isIdle = false; isTransitioning = true; transitionProgress = 0; }
